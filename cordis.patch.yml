@@ -1,0 +1,3 @@
+- insert:
+    - id: composer-extension
+      name: dsh-composer-extension

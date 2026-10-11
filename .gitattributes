@@ -1,0 +1,3 @@
+* text=auto eol=lf
+# 补丁按原始字节保存；空白上下文行是补丁格式的一部分。
+*.patch -text -whitespace
