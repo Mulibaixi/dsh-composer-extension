@@ -5,11 +5,12 @@ import type { UserMessage } from '@deepseek-ai/dsh-llm/types'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import type { SessionController } from '@deepseek-ai/dsh-api-session-controller'
 import type { SessionEvent } from '@deepseek-ai/dsh-session/types'
-import type { ExchangeResolution, ExchangeRequest, TranslationExchangeService } from '../shared/contracts.js'
+import type { ExchangeResolution, ExchangeRequest, TaskPhaseEvent, TranslationExchangeService } from '../shared/contracts.js'
 
 declare module '@deepseek-ai/dsh-llm/types' {
   interface MessageSourceMap {
     'dsh-composer-exchange': { readonly kind: 'dsh-composer-exchange'; readonly exchangeId: string }
+    'dsh-composer-task-phase': { readonly kind: 'dsh-composer-task-phase'; readonly eventId: string }
   }
 }
 
@@ -41,9 +42,16 @@ export interface MainAgentRouteHost {
   notificationDiscarded(agent: Agent, exchangeId: string, messageId: string): void
   userStopped(agent: Agent, turn: number): void
   notificationCurrent(agent: Agent, exchangeId: string, messageId: string): boolean
+  readonly taskPhase?: {
+    read(agent: Agent, eventId: string): Promise<TaskPhaseEvent | null>
+    enqueued(agent: Agent, eventId: string, messageId: string): boolean
+    claimed(agent: Agent, eventId: string, messageId: string, turn: number): void
+    discarded(agent: Agent, eventId: string, messageId: string): void
+    current(agent: Agent, eventId: string, messageId: string): Promise<boolean>
+  }
 }
 
-interface MountedAgent { readonly agent: Agent; readonly dispose: () => void; readonly messages: Map<string, string> }
+interface MountedAgent { readonly agent: Agent; readonly dispose: () => void; readonly messages: Map<string, string>; readonly phaseMessages: Map<string, string> }
 
 /** Installs scoped tools on the exact SessionController Agent and queues one next-turn notice. */
 export class MainAgentRoute {
@@ -99,6 +107,44 @@ export class MainAgentRoute {
 
   owns(agent: Agent): boolean { return this.mounted.get(String(agent.id))?.agent === agent }
 
+  /** A preparation notice uses the same native main-Agent queue, with its own fact and source. */
+  async notifyTaskPhase(event: TaskPhaseEvent): Promise<boolean> {
+    if (this.disposed || !this.host.taskPhase) return false
+    const mainSessionId = event.scope.mainSessionId
+    const result = await this.host.controller.resolveAgent(mainSessionId as Agent['id'])
+    if (!('agent' in result) || this.disposed) return false
+    const agent = result.agent
+    if (agent.id !== mainSessionId || agent.session.id !== mainSessionId) return false
+    this.mount(agent)
+    const stoppedTurn = this.stopped.get(mainSessionId)
+    if (stoppedTurn !== undefined) { this.host.userStopped(agent, stoppedTurn); return false }
+    const fact = await this.host.taskPhase.read(agent, event.eventId)
+    if (!fact || this.disposed || !this.owns(agent) || this.stopped.has(mainSessionId)) return false
+    const outcome = fact.phase === 'terminology_analysis_completed'
+      ? fact.coverageComplete ? '分析完成，需译范围覆盖完整。' : '请求的局部分析完成，整篇准备覆盖尚未完成。'
+      : fact.phase === 'terminology_analysis_failed' ? '分析已明确失败。' : '分析调用结果未知；请查询原调用，不得自动重新派发。'
+    const reference = { target: { kind: 'material', mainSessionId, ...fact.result.material, sourceVersion: fact.result.sourceVersion }, analysisId: fact.result.analysisId,
+      version: fact.result.version, operationId: fact.operationId, coverageComplete: fact.coverageComplete }
+    const message = createUserMessage({ content: [{ type: 'text', text:
+      `Composer 术语分析阶段通知。${outcome}请使用 translation_analysis_status 核对已固定材料的分析引用，使用 translation_analysis_read 按页读取候选、覆盖和调用记录，再继续处理原用户任务。阶段通知本身不表示准备包或整篇翻译已完成。\n${JSON.stringify(reference)}` }],
+      source: { kind: 'dsh-composer-task-phase', eventId: fact.eventId } })
+    if (!this.host.taskPhase.enqueued(agent, fact.eventId, message.id)) return false
+    this.mounted.get(mainSessionId)!.phaseMessages.set(message.id, fact.eventId)
+    try { agent.followup(message); return true }
+    catch {
+      this.mounted.get(mainSessionId)?.phaseMessages.delete(message.id)
+      this.host.taskPhase.discarded(agent, fact.eventId, message.id)
+      return false
+    }
+  }
+
+  removeTaskPhaseNotification(mainSessionId: string, eventId: string, messageId: string): void {
+    const mounted = this.mounted.get(mainSessionId)
+    if (mounted?.phaseMessages.get(messageId) !== eventId) return
+    if (mounted.agent.inbox.remove(messageId as never)) this.host.taskPhase?.discarded(mounted.agent, eventId, messageId)
+    mounted.phaseMessages.delete(messageId)
+  }
+
   async removeNotification(mainSessionId: string, exchangeId: string, messageId: string): Promise<void> {
     const mounted = this.mounted.get(mainSessionId)
     if (mounted && mounted.messages.get(messageId) === exchangeId && mounted.agent.inbox.remove(messageId as never)) {
@@ -119,6 +165,9 @@ export class MainAgentRoute {
     for (const mounted of this.mounted.values()) {
       for (const [messageId, exchangeId] of mounted.messages) {
         if (mounted.agent.inbox.remove(messageId as never)) this.host.notificationDiscarded(mounted.agent, exchangeId, messageId)
+      }
+      for (const [messageId, eventId] of mounted.phaseMessages) {
+        if (mounted.agent.inbox.remove(messageId as never)) this.host.taskPhase?.discarded(mounted.agent, eventId, messageId)
       }
       mounted.dispose()
     }
@@ -189,10 +238,15 @@ export class MainAgentRoute {
     })
     disposers.push(ctx.tools.register(read), ctx.tools.register(resolve), ctx.tools.register(status))
     const messages = new Map<string, string>()
+    const phaseMessages = new Map<string, string>()
     disposers.push(ctx.on('agent/inbox/discarded', ({ agent: subject, message }) => {
       if (subject === agent && message.source.kind === 'dsh-composer-exchange') {
         messages.delete(message.id)
         this.host.notificationDiscarded(agent, message.source.exchangeId, message.id)
+      }
+      if (subject === agent && message.source.kind === 'dsh-composer-task-phase') {
+        phaseMessages.delete(message.id)
+        this.host.taskPhase?.discarded(agent, message.source.eventId, message.id)
       }
     }))
     disposers.push(ctx.on('agent/inbox/claimed', ({ agent: subject, message, turn }) => {
@@ -200,13 +254,25 @@ export class MainAgentRoute {
         messages.delete(message.id)
         this.host.notificationClaimed(agent, message.source.exchangeId, message.id, turn)
       }
+      if (subject === agent && message.source.kind === 'dsh-composer-task-phase') {
+        phaseMessages.delete(message.id)
+        this.host.taskPhase?.claimed(agent, message.source.eventId, message.id, turn)
+      }
     }))
     disposers.push(ctx.on('agent/pre-step', async ({ agent: subject, messages }, next) => {
       if (subject === agent && messages.length === 1) {
         const message = messages[0]!
         if (message.source.kind === 'dsh-composer-exchange' && !this.host.notificationCurrent(agent, message.source.exchangeId, message.id)) return { kind: 'reject' }
       }
-      return next()
+      const decision = await next()
+      if (subject !== agent || decision.kind === 'reject' || decision.messages.length === 0) return decision
+      const retained = []
+      for (const message of decision.messages) {
+        if (message.source.kind === 'dsh-composer-task-phase' &&
+          !await this.host.taskPhase?.current(agent, message.source.eventId, message.id)) continue
+        retained.push(message)
+      }
+      return retained.length ? { ...decision, messages: retained } : { kind: 'reject' }
     }))
     disposers.push(ctx.on('session/event', (session, event: SessionEvent) => {
       if (session !== agent.session || event.type !== 'turn/end') return
@@ -217,6 +283,6 @@ export class MainAgentRoute {
       }
     }))
     const dispose = () => { for (const dispose of disposers.splice(0).reverse()) dispose() }
-    this.mounted.set(key, { agent, dispose, messages })
+    this.mounted.set(key, { agent, dispose, messages, phaseMessages })
   }
 }

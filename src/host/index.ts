@@ -19,10 +19,16 @@ import {
   type TranslationExchangeService,
   type ExecutorAdapter,
   type ExecutorOperationRef,
+  TASK_PHASE_PROTOCOL,
+  type TaskPhaseCapability,
+  type TaskPhaseEvent,
+  type TaskPhaseInspector,
+  type TaskPhaseView,
 } from '../shared/contracts.js'
 import { parseExchangeRequest, parseExchangeResolution, parseRequestContextInput } from '../shared/exchange-codec.js'
 import { ExchangeStateStore, type ExchangeRecord } from './exchange-state.js'
 import { MainAgentRoute } from './main-agent-route.js'
+import { parseTaskPhaseEvent } from './task-phase.js'
 
 declare module '@deepseek-ai/cordis' {
   interface Context { translationExchange: TranslationExchangeService }
@@ -32,6 +38,16 @@ export const name = 'dsh-composer-extension'
 export const inject = ['typert', 'sessionController'] as const
 
 interface Registration { readonly adapter: ExecutorAdapter; disposers: number }
+interface PhaseRegistration { readonly inspector: TaskPhaseInspector; disposers: number }
+interface PhaseRecord {
+  readonly registration: PhaseRegistration
+  readonly event: TaskPhaseEvent
+  readonly signature: string
+  state: TaskPhaseView['state']
+  messageId: string | null
+  userStopped: boolean
+  pending?: Promise<DomainResult<TaskPhaseView>>
+}
 type StateFailure = 'not_found' | 'version_conflict' | 'invalid_state' | 'budget_exhausted' | 'idempotency_conflict' | 'scope_conflict'
 
 const errorInfo: Record<StateFailure, Pick<ExchangeError, 'code' | 'message' | 'stage'>> = {
@@ -54,6 +70,8 @@ export class TranslationExchangeHostService implements TranslationExchangeServic
   private readonly store = new ExchangeStateStore()
   private readonly registrations = new Map<Context, Registration>()
   private readonly operationOwners = new Map<string, Registration>()
+  private readonly phaseRegistrations = new Map<Context, PhaseRegistration>()
+  private readonly phaseRecords = new Map<string, PhaseRecord>()
   private readonly mainAgents: MainAgentRoute
   private disposed = false
 
@@ -76,13 +94,112 @@ export class TranslationExchangeHostService implements TranslationExchangeServic
       },
       userStopped: (agent, turn) => {
         if (this.mainAgents.owns(agent)) this.store.markUserStopped(String(agent.id), turn)
+        if (this.mainAgents.owns(agent)) for (const record of this.phaseRecords.values()) {
+          if (record.event.scope.mainSessionId === String(agent.id)) record.userStopped = true
+        }
       },
       notificationCurrent: (agent, exchangeId, messageId) => {
         const record = this.store.get(String(agent.id), exchangeId)
         return this.mainAgents.owns(agent) && !!record && record.notificationMessageId === messageId &&
           ['enqueued', 'claimed', 'read'].includes(record.notification) && record.status === 'open' && !record.userStopped
       },
+      taskPhase: {
+        read: (agent, eventId) => this.inspectPhaseForAgent(agent, eventId, 'not_enqueued'),
+        enqueued: (agent, eventId, messageId) => {
+          const record = this.phaseForAgent(agent, eventId)
+          if (!record || record.state !== 'not_enqueued' || record.userStopped) return false
+          record.state = 'enqueued'; record.messageId = messageId
+          return true
+        },
+        claimed: (agent, eventId, messageId) => {
+          const record = this.phaseForAgent(agent, eventId)
+          if (record?.messageId === messageId && record.state === 'enqueued') record.state = 'claimed'
+        },
+        discarded: (agent, eventId, messageId) => {
+          const record = this.phaseForAgent(agent, eventId)
+          if (record?.messageId === messageId) record.state = 'discarded'
+        },
+        current: async (agent, eventId, messageId) => {
+          const record = this.phaseForAgent(agent, eventId)
+          if (!record || record.messageId !== messageId || !['enqueued', 'claimed'].includes(record.state)) return false
+          return !!await this.inspectPhaseForAgent(agent, eventId, record.state)
+        },
+      },
     })
+  }
+
+  registerTaskPhaseInspector(owner: Context, inspector: TaskPhaseInspector): () => void {
+    if (this.disposed) throw new Error('exchange_service_disposed')
+    const current = this.phaseRegistrations.get(owner)
+    if (current && current.inspector !== inspector) throw new Error('task_phase_inspector_already_registered')
+    const registration = current ?? { inspector, disposers: 0 }
+    registration.disposers++
+    this.phaseRegistrations.set(owner, registration)
+    let active = true
+    return () => {
+      if (!active) return
+      active = false
+      if (--registration.disposers !== 0 || this.phaseRegistrations.get(owner) !== registration) return
+      this.phaseRegistrations.delete(owner)
+      for (const [key, record] of this.phaseRecords) if (record.registration === registration) {
+        this.phaseRecords.delete(key)
+        if (record.messageId) this.mainAgents.removeTaskPhaseNotification(record.event.scope.mainSessionId, record.event.eventId, record.messageId)
+      }
+    }
+  }
+
+  taskPhaseCapabilities(): TaskPhaseCapability {
+    const ready = !this.disposed && this.mainAgents.available
+    return { phaseProtocol: TASK_PHASE_PROTOCOL, ready, reason: ready ? null : 'main_agent_route_unavailable' }
+  }
+
+  async notifyTaskPhase(owner: Context, input: TaskPhaseEvent): Promise<DomainResult<TaskPhaseView>> {
+    const registration = this.phaseRegistrations.get(owner)
+    if (this.disposed || !registration) return failure({ code: 'task_phase_inspector_unavailable', message: '分析阶段事实核验端未注册。', stage: 'authorize' })
+    let event: TaskPhaseEvent
+    try { event = parseTaskPhaseEvent(input) } catch { return failure({ code: 'invalid_task_phase', message: '分析阶段通知必须使用明确身份、终态和短结果引用。', stage: 'protocol' }) }
+    if (event.hostGeneration !== this.hostGeneration) return failure(errorInfo.scope_conflict)
+    const key = JSON.stringify([event.scope.mainSessionId, event.eventId]), signature = JSON.stringify(event)
+    let record = this.phaseRecords.get(key)
+    if (record && (record.registration !== registration || record.signature !== signature)) return failure(errorInfo.idempotency_conflict)
+    if (record?.pending) return record.pending
+    if (record) return { ok: true, value: { eventId: event.eventId, state: record.state } }
+    if (this.phaseRecords.size >= 1024) return failure({ code: 'task_phase_budget_exhausted', message: '当前宿主阶段通知记录已达上限。', stage: 'notify' })
+    record = { registration, event, signature, state: 'not_enqueued', messageId: null, userStopped: false }
+    this.phaseRecords.set(key, record)
+    const fixed = record
+    fixed.pending = (async (): Promise<DomainResult<TaskPhaseView>> => {
+      if (!await this.phaseFactCurrent(fixed)) {
+        fixed.state = 'unavailable'
+        return failure({ code: 'task_phase_fact_mismatch', message: '分析阶段通知与已授权的实际终态不一致。', stage: 'authorize' })
+      }
+      try {
+        if (!await this.mainAgents.notifyTaskPhase(event) && fixed.state === 'not_enqueued') fixed.state = 'unavailable'
+      } catch { if (fixed.state === 'not_enqueued') fixed.state = 'unavailable' }
+      return { ok: true, value: { eventId: event.eventId, state: fixed.state } }
+    })()
+    try { return await fixed.pending } finally { delete fixed.pending }
+  }
+
+  private phaseForAgent(agent: Agent, eventId: string): PhaseRecord | undefined {
+    const record = this.phaseRecords.get(JSON.stringify([String(agent.id), eventId]))
+    return !this.disposed && this.mainAgents.owns(agent) && record && [...this.phaseRegistrations.values()].includes(record.registration) &&
+      record.event.scope.mainSessionId === String(agent.session.id) ? record : undefined
+  }
+
+  private async phaseFactCurrent(record: PhaseRecord): Promise<boolean> {
+    if (this.disposed || ![...this.phaseRegistrations.values()].includes(record.registration) || record.userStopped) return false
+    try {
+      const fact = await record.registration.inspector.inspectTaskPhase(structuredClone(record.event))
+      return !this.disposed && [...this.phaseRegistrations.values()].includes(record.registration) && !record.userStopped &&
+        fact !== null && JSON.stringify(parseTaskPhaseEvent(fact)) === record.signature
+    } catch { return false }
+  }
+
+  private async inspectPhaseForAgent(agent: Agent, eventId: string, state: TaskPhaseView['state']): Promise<TaskPhaseEvent | null> {
+    const record = this.phaseForAgent(agent, eventId)
+    if (!record || record.state !== state || !await this.phaseFactCurrent(record)) return null
+    return this.phaseForAgent(agent, eventId) === record && record.state === state && !record.userStopped ? structuredClone(record.event) : null
   }
 
   register(owner: Context, adapter: ExecutorAdapter): () => void {
@@ -202,7 +319,7 @@ export class TranslationExchangeHostService implements TranslationExchangeServic
 
   dispose(): void {
     if (this.disposed) return
-    this.disposed = true; this.mainAgents.dispose(); this.registrations.clear(); this.operationOwners.clear()
+    this.disposed = true; this.mainAgents.dispose(); this.registrations.clear(); this.operationOwners.clear(); this.phaseRegistrations.clear(); this.phaseRecords.clear()
   }
 
   readForAgent(agent: Agent, request: Omit<ExchangeRequest, 'mainSessionId'>): DomainResult<ExchangeAgentRead> {

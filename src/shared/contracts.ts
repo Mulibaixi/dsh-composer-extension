@@ -5,6 +5,7 @@ import type { SessionId } from '@deepseek-ai/dsh-session/types'
 export const COMPOSER_PROTOCOL = 1 as const
 export const EXCHANGE_PROTOCOL = 1 as const
 export const NORMAL_PROTOCOL = 2 as const
+export const TASK_PHASE_PROTOCOL = 1 as const
 
 export type CapabilityState = 'available' | 'unavailable' | 'unknown'
 export type CapabilityKey = 'composer' | 'materialBridge' | 'normal' | 'exchange' | 'modelControl'
@@ -146,8 +147,46 @@ export interface ComposerExtensionService {
   register(owner: Context, adapter: ComposerSubmissionAdapter): () => void
 }
 
+export interface TaskPhaseScope {
+  readonly ownerId: string
+  readonly mainSessionId: string
+  readonly topicId: string
+  readonly translationSessionId: string
+}
+
+/** No unit exists during independent preparation; only the exact analysis result is referenced. */
+export interface TaskPhaseEvent {
+  readonly eventId: string
+  readonly hostGeneration: string
+  readonly scope: TaskPhaseScope
+  readonly operationId: string
+  readonly phase: 'terminology_analysis_completed' | 'terminology_analysis_failed' | 'terminology_analysis_unknown'
+  readonly result: { readonly kind: 'analysis'; readonly analysisId: string; readonly version: number; readonly sourceVersion: number;
+    readonly material: { readonly requestId: string; readonly materialId: string } }
+  readonly coverageComplete: boolean
+}
+
+export interface TaskPhaseInspector {
+  inspectTaskPhase(event: TaskPhaseEvent): TaskPhaseEvent | null | Promise<TaskPhaseEvent | null>
+}
+
+export interface TaskPhaseCapability {
+  readonly phaseProtocol: typeof TASK_PHASE_PROTOCOL
+  readonly ready: boolean
+  readonly reason: string | null
+}
+
+export interface TaskPhaseView {
+  readonly eventId: string
+  readonly state: 'not_enqueued' | 'enqueued' | 'claimed' | 'discarded' | 'unavailable'
+}
+
 export interface TranslationExchangeService {
   readonly hostGeneration: string
+  /** Additive in-process port; exchangeProtocol and existing Remote methods stay at version 1. */
+  registerTaskPhaseInspector(owner: Context, inspector: TaskPhaseInspector): () => void
+  taskPhaseCapabilities(): TaskPhaseCapability
+  notifyTaskPhase(owner: Context, event: TaskPhaseEvent): Promise<DomainResult<TaskPhaseView>>
   register(owner: Context, adapter: ExecutorAdapter): () => void
   acceptNeedsContext(owner: Context, ref: NeedsContextReference, questions: RequestContextInput): Promise<DomainResult<ExchangeView>>
   notifyMainAgent(owner: Context, ref: NeedsContextReference): Promise<boolean>

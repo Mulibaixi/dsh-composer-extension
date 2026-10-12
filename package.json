@@ -1,9 +1,9 @@
 {
   "name": "dsh-composer-extension",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "license": "MIT",
-  "description": "Bounded coordination between the native Composer, main Agent, and translation execution adapter.",
+  "description": "Bounded coordination between the native Composer, main Agent, and translation task phases.",
   "type": "module",
   "main": "./dist/host/index.js",
   "types": "./dist/host/index.d.ts",

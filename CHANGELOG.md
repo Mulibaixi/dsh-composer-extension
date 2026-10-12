@@ -1,5 +1,18 @@
 # 更新记录
 
+## [0.2.0] - 2026-10-13
+
+本地功能版本记录，不代表已发布到 npm 或远程发行页。
+
+- Host 增加独立 `phaseProtocol` 1 阶段通知服务。Owner 可注册事实 inspector、查询能力并提交阶段事件；Host 按实际主会话 Agent 核对范围与终态，再排入带操作/结果引用的 next-turn 通知，不携带原文正文或候选表。
+- 同一 owner、主会话和事件标识只接受同一固定阶段事实；重复提交返回原状态，不重复排队。用户已停止主 Agent、阶段事实变化、路由不可用或 owner 卸载时，不会把旧通知继续交给模型；卸载还会移除本扩展尚未处理的队列项。
+- 匹配翻译插件 v0.16.1 用此接口在术语分析结束后唤醒所属主 Agent 查询原分析。扩展只协调阶段通知，不持有翻译术语结果。
+
+### 协议与兼容性
+
+- 新 `phaseProtocol` 与既有 Composer protocol 1、Exchange protocol 1、Normal protocol 2 及 Remote 接口分别演进；不改变这些既有契约，也不把扩展能力描述为官方 DSH 接口。
+- 旧版扩展不提供阶段通知服务；翻译插件可保留分析查询能力，但不能自动通知主 Agent。普通 Composer 提交仍要求匹配的 protocol 1 宿主接口。
+
 ## [0.1.0] - 2026-10-11
 
 - Host 增加临时 exchange 状态协调、CAS、单次补充预算和 executor 事实核验；所属主 Agent 工具按实际 Agent 安装，翻译模型求助要求匹配路由支持 `request_context`。
