@@ -6,6 +6,7 @@ export const COMPOSER_PROTOCOL = 1 as const
 export const EXCHANGE_PROTOCOL = 1 as const
 export const NORMAL_PROTOCOL = 2 as const
 export const TASK_PHASE_PROTOCOL = 1 as const
+export const BATCH_PROTOCOL = 1 as const
 
 export type CapabilityState = 'available' | 'unavailable' | 'unknown'
 export type CapabilityKey = 'composer' | 'materialBridge' | 'normal' | 'exchange' | 'modelControl'
@@ -181,12 +182,42 @@ export interface TaskPhaseView {
   readonly state: 'not_enqueued' | 'enqueued' | 'claimed' | 'discarded' | 'unavailable'
 }
 
+/** Separate capability: neither normal v2 nor analysis phase v1 implies document support. */
+export interface BatchExchangeCapabilities {
+  readonly batchProtocol: typeof BATCH_PROTOCOL
+  readonly exchange: Capability
+  readonly taskPhase: Capability
+}
+
+export interface BatchTaskPhaseEvent {
+  readonly eventId: string
+  readonly hostGeneration: string
+  readonly scope: TaskPhaseScope
+  readonly operationId: string
+  readonly phase: 'document_context_required' | 'document_dependencies_changed' | 'document_review_required'
+  readonly result: { readonly kind: 'task'; readonly taskId: string; readonly unitId: string; readonly sourceVersion: number;
+    readonly version: number; readonly taskSequence: number }
+}
+
+export interface BatchTaskPhaseInspector {
+  inspectBatchTaskPhase(event: BatchTaskPhaseEvent): BatchTaskPhaseEvent | null | Promise<BatchTaskPhaseEvent | null>
+}
+
 export interface TranslationExchangeService {
   readonly hostGeneration: string
   /** Additive in-process port; exchangeProtocol and existing Remote methods stay at version 1. */
   registerTaskPhaseInspector(owner: Context, inspector: TaskPhaseInspector): () => void
   taskPhaseCapabilities(): TaskPhaseCapability
   notifyTaskPhase(owner: Context, event: TaskPhaseEvent): Promise<DomainResult<TaskPhaseView>>
+  /** Document child operations use the real document unit and childOperationId as scope.operationId. */
+  registerBatch(owner: Context, adapter: ExecutorAdapter): () => void
+  registerBatchTaskPhaseInspector(owner: Context, inspector: BatchTaskPhaseInspector): () => void
+  batchCapabilities(): BatchExchangeCapabilities
+  notifyBatchTaskPhase(owner: Context, event: BatchTaskPhaseEvent): Promise<DomainResult<TaskPhaseView>>
+  acceptBatchNeedsContext(owner: Context, ref: NeedsContextReference, questions: RequestContextInput): Promise<DomainResult<ExchangeView>>
+  notifyBatchMainAgent(owner: Context, ref: NeedsContextReference): Promise<boolean>
+  finishBatchOperation(owner: Context, ref: ExecutorOperationRef, result: 'completed' | 'needs_context' | 'unknown' | 'cancelled'): Promise<DomainResult<ExchangeView>>
+  batchResumeStarted(owner: Context, ref: ExecutorOperationRef, resolutionId: string): void
   register(owner: Context, adapter: ExecutorAdapter): () => void
   acceptNeedsContext(owner: Context, ref: NeedsContextReference, questions: RequestContextInput): Promise<DomainResult<ExchangeView>>
   notifyMainAgent(owner: Context, ref: NeedsContextReference): Promise<boolean>

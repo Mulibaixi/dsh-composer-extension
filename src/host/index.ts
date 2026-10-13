@@ -24,11 +24,15 @@ import {
   type TaskPhaseEvent,
   type TaskPhaseInspector,
   type TaskPhaseView,
+  BATCH_PROTOCOL,
+  type BatchExchangeCapabilities,
+  type BatchTaskPhaseEvent,
+  type BatchTaskPhaseInspector,
 } from '../shared/contracts.js'
 import { parseExchangeRequest, parseExchangeResolution, parseRequestContextInput } from '../shared/exchange-codec.js'
 import { ExchangeStateStore, type ExchangeRecord } from './exchange-state.js'
 import { MainAgentRoute } from './main-agent-route.js'
-import { parseTaskPhaseEvent } from './task-phase.js'
+import { parseBatchTaskPhaseEvent, parseTaskPhaseEvent } from './task-phase.js'
 
 declare module '@deepseek-ai/cordis' {
   interface Context { translationExchange: TranslationExchangeService }
@@ -38,10 +42,11 @@ export const name = 'dsh-composer-extension'
 export const inject = ['typert', 'sessionController'] as const
 
 interface Registration { readonly adapter: ExecutorAdapter; disposers: number }
-interface PhaseRegistration { readonly inspector: TaskPhaseInspector; disposers: number }
+type PhaseRegistration = { readonly kind: 'analysis'; readonly inspector: TaskPhaseInspector; disposers: number }
+  | { readonly kind: 'batch'; readonly inspector: BatchTaskPhaseInspector; disposers: number }
 interface PhaseRecord {
   readonly registration: PhaseRegistration
-  readonly event: TaskPhaseEvent
+  readonly event: TaskPhaseEvent | BatchTaskPhaseEvent
   readonly signature: string
   state: TaskPhaseView['state']
   messageId: string | null
@@ -69,8 +74,10 @@ export class TranslationExchangeHostService implements TranslationExchangeServic
   readonly hostGeneration = crypto.randomUUID()
   private readonly store = new ExchangeStateStore()
   private readonly registrations = new Map<Context, Registration>()
+  private readonly batchRegistrations = new Map<Context, Registration>()
   private readonly operationOwners = new Map<string, Registration>()
   private readonly phaseRegistrations = new Map<Context, PhaseRegistration>()
+  private readonly batchPhaseRegistrations = new Map<Context, PhaseRegistration>()
   private readonly phaseRecords = new Map<string, PhaseRecord>()
   private readonly mainAgents: MainAgentRoute
   private disposed = false
@@ -101,6 +108,7 @@ export class TranslationExchangeHostService implements TranslationExchangeServic
       notificationCurrent: (agent, exchangeId, messageId) => {
         const record = this.store.get(String(agent.id), exchangeId)
         return this.mainAgents.owns(agent) && !!record && record.notificationMessageId === messageId &&
+          this.operationOwners.has(operationKey(record.scope)) &&
           ['enqueued', 'claimed', 'read'].includes(record.notification) && record.status === 'open' && !record.userStopped
       },
       taskPhase: {
@@ -129,18 +137,26 @@ export class TranslationExchangeHostService implements TranslationExchangeServic
   }
 
   registerTaskPhaseInspector(owner: Context, inspector: TaskPhaseInspector): () => void {
+    return this.registerPhase(owner, { kind: 'analysis', inspector, disposers: 0 }, this.phaseRegistrations)
+  }
+
+  registerBatchTaskPhaseInspector(owner: Context, inspector: BatchTaskPhaseInspector): () => void {
+    return this.registerPhase(owner, { kind: 'batch', inspector, disposers: 0 }, this.batchPhaseRegistrations)
+  }
+
+  private registerPhase(owner: Context, candidate: PhaseRegistration, registrations: Map<Context, PhaseRegistration>): () => void {
     if (this.disposed) throw new Error('exchange_service_disposed')
-    const current = this.phaseRegistrations.get(owner)
-    if (current && current.inspector !== inspector) throw new Error('task_phase_inspector_already_registered')
-    const registration = current ?? { inspector, disposers: 0 }
+    const current = registrations.get(owner)
+    if (current && current.inspector !== candidate.inspector) throw new Error('task_phase_inspector_already_registered')
+    const registration = current ?? candidate
     registration.disposers++
-    this.phaseRegistrations.set(owner, registration)
+    registrations.set(owner, registration)
     let active = true
     return () => {
       if (!active) return
       active = false
-      if (--registration.disposers !== 0 || this.phaseRegistrations.get(owner) !== registration) return
-      this.phaseRegistrations.delete(owner)
+      if (--registration.disposers !== 0 || registrations.get(owner) !== registration) return
+      registrations.delete(owner)
       for (const [key, record] of this.phaseRecords) if (record.registration === registration) {
         this.phaseRecords.delete(key)
         if (record.messageId) this.mainAgents.removeTaskPhaseNotification(record.event.scope.mainSessionId, record.event.eventId, record.messageId)
@@ -154,10 +170,18 @@ export class TranslationExchangeHostService implements TranslationExchangeServic
   }
 
   async notifyTaskPhase(owner: Context, input: TaskPhaseEvent): Promise<DomainResult<TaskPhaseView>> {
-    const registration = this.phaseRegistrations.get(owner)
-    if (this.disposed || !registration) return failure({ code: 'task_phase_inspector_unavailable', message: '分析阶段事实核验端未注册。', stage: 'authorize' })
-    let event: TaskPhaseEvent
-    try { event = parseTaskPhaseEvent(input) } catch { return failure({ code: 'invalid_task_phase', message: '分析阶段通知必须使用明确身份、终态和短结果引用。', stage: 'protocol' }) }
+    return this.notifyPhase(this.phaseRegistrations.get(owner), input)
+  }
+
+  async notifyBatchTaskPhase(owner: Context, input: BatchTaskPhaseEvent): Promise<DomainResult<TaskPhaseView>> {
+    return this.notifyPhase(this.batchPhaseRegistrations.get(owner), input)
+  }
+
+  private async notifyPhase(registration: PhaseRegistration | undefined, input: TaskPhaseEvent | BatchTaskPhaseEvent): Promise<DomainResult<TaskPhaseView>> {
+    if (this.disposed || !registration) return failure({ code: 'task_phase_inspector_unavailable', message: '阶段事实核验端未注册。', stage: 'authorize' })
+    let event: TaskPhaseEvent | BatchTaskPhaseEvent
+    try { event = registration.kind === 'analysis' ? parseTaskPhaseEvent(input) : parseBatchTaskPhaseEvent(input) }
+    catch { return failure({ code: 'invalid_task_phase', message: '阶段通知必须使用明确身份、实际状态和短结果引用。', stage: 'protocol' }) }
     if (event.hostGeneration !== this.hostGeneration) return failure(errorInfo.scope_conflict)
     const key = JSON.stringify([event.scope.mainSessionId, event.eventId]), signature = JSON.stringify(event)
     let record = this.phaseRecords.get(key)
@@ -171,7 +195,7 @@ export class TranslationExchangeHostService implements TranslationExchangeServic
     fixed.pending = (async (): Promise<DomainResult<TaskPhaseView>> => {
       if (!await this.phaseFactCurrent(fixed)) {
         fixed.state = 'unavailable'
-        return failure({ code: 'task_phase_fact_mismatch', message: '分析阶段通知与已授权的实际终态不一致。', stage: 'authorize' })
+        return failure({ code: 'task_phase_fact_mismatch', message: '阶段通知与已授权的实际状态不一致。', stage: 'authorize' })
       }
       try {
         if (!await this.mainAgents.notifyTaskPhase(event) && fixed.state === 'not_enqueued') fixed.state = 'unavailable'
@@ -183,45 +207,73 @@ export class TranslationExchangeHostService implements TranslationExchangeServic
 
   private phaseForAgent(agent: Agent, eventId: string): PhaseRecord | undefined {
     const record = this.phaseRecords.get(JSON.stringify([String(agent.id), eventId]))
-    return !this.disposed && this.mainAgents.owns(agent) && record && [...this.phaseRegistrations.values()].includes(record.registration) &&
+    return !this.disposed && this.mainAgents.owns(agent) && record && this.phaseRegistered(record.registration) &&
       record.event.scope.mainSessionId === String(agent.session.id) ? record : undefined
   }
 
   private async phaseFactCurrent(record: PhaseRecord): Promise<boolean> {
-    if (this.disposed || ![...this.phaseRegistrations.values()].includes(record.registration) || record.userStopped) return false
+    if (this.disposed || !this.phaseRegistered(record.registration) || record.userStopped) return false
     try {
-      const fact = await record.registration.inspector.inspectTaskPhase(structuredClone(record.event))
-      return !this.disposed && [...this.phaseRegistrations.values()].includes(record.registration) && !record.userStopped &&
-        fact !== null && JSON.stringify(parseTaskPhaseEvent(fact)) === record.signature
+      const fact = record.registration.kind === 'analysis'
+        ? await record.registration.inspector.inspectTaskPhase(structuredClone(record.event) as TaskPhaseEvent)
+        : await record.registration.inspector.inspectBatchTaskPhase(structuredClone(record.event) as BatchTaskPhaseEvent)
+      return !this.disposed && this.phaseRegistered(record.registration) && !record.userStopped && fact !== null &&
+        JSON.stringify(record.registration.kind === 'analysis' ? parseTaskPhaseEvent(fact) : parseBatchTaskPhaseEvent(fact)) === record.signature
     } catch { return false }
   }
 
-  private async inspectPhaseForAgent(agent: Agent, eventId: string, state: TaskPhaseView['state']): Promise<TaskPhaseEvent | null> {
+  private phaseRegistered(registration: PhaseRegistration): boolean {
+    return [...(registration.kind === 'analysis' ? this.phaseRegistrations : this.batchPhaseRegistrations).values()].includes(registration)
+  }
+
+  private async inspectPhaseForAgent(agent: Agent, eventId: string, state: TaskPhaseView['state']): Promise<TaskPhaseEvent | BatchTaskPhaseEvent | null> {
     const record = this.phaseForAgent(agent, eventId)
     if (!record || record.state !== state || !await this.phaseFactCurrent(record)) return null
     return this.phaseForAgent(agent, eventId) === record && record.state === state && !record.userStopped ? structuredClone(record.event) : null
   }
 
   register(owner: Context, adapter: ExecutorAdapter): () => void {
+    return this.registerExecutor(owner, adapter, this.registrations)
+  }
+
+  registerBatch(owner: Context, adapter: ExecutorAdapter): () => void {
+    return this.registerExecutor(owner, adapter, this.batchRegistrations)
+  }
+
+  private registerExecutor(owner: Context, adapter: ExecutorAdapter, registrations: Map<Context, Registration>): () => void {
     if (this.disposed) throw new Error('exchange_service_disposed')
-    const current = this.registrations.get(owner)
+    const current = registrations.get(owner)
     if (current && current.adapter !== adapter) throw new Error('exchange_adapter_already_registered')
     const registration = current ?? { adapter, disposers: 0 }
     registration.disposers++
-    this.registrations.set(owner, registration)
+    registrations.set(owner, registration)
     let active = true
     return () => {
       if (!active) return
       active = false
-      if (--registration.disposers === 0 && this.registrations.get(owner) === registration) {
-        this.registrations.delete(owner)
-        for (const [key, value] of this.operationOwners) if (value === registration) this.operationOwners.delete(key)
+      if (--registration.disposers === 0 && registrations.get(owner) === registration) {
+        registrations.delete(owner)
+        for (const [key, value] of this.operationOwners) if (value === registration) {
+          this.operationOwners.delete(key)
+          const [mainSessionId, translationSessionId, operationId] = JSON.parse(key) as string[]
+          for (const record of this.store.recordsForOperation(mainSessionId!, operationId!)) {
+            if (record.scope.translationSessionId === translationSessionId && record.notificationMessageId)
+              void this.mainAgents.removeNotification(mainSessionId!, record.exchangeId, record.notificationMessageId).catch(() => {})
+          }
+        }
       }
     }
   }
 
   async acceptNeedsContext(owner: Context, ref: NeedsContextReference, questions: RequestContextInput): Promise<DomainResult<ExchangeView>> {
-    const registration = this.registrations.get(owner)
+    return this.acceptContext(this.registrations.get(owner), ref, questions)
+  }
+
+  async acceptBatchNeedsContext(owner: Context, ref: NeedsContextReference, questions: RequestContextInput): Promise<DomainResult<ExchangeView>> {
+    return this.acceptContext(this.batchRegistrations.get(owner), ref, questions)
+  }
+
+  private async acceptContext(registration: Registration | undefined, ref: NeedsContextReference, questions: RequestContextInput): Promise<DomainResult<ExchangeView>> {
     if (this.disposed || !registration) return failure({ code: 'executor_unavailable', message: '翻译执行适配器未注册。', stage: 'authorize' })
     if (ref.hostGeneration !== this.hostGeneration || ref.scope.mainSessionId.length === 0) return failure(errorInfo.scope_conflict)
     let inspected: Record<string, unknown> | null
@@ -239,6 +291,9 @@ export class TranslationExchangeHostService implements TranslationExchangeServic
     try { parsed = parseRequestContextInput(questions, sourceLength as number) }
     catch { return failure({ code: 'invalid_questions', message: '补充问题不符合范围或长度限制。', stage: 'protocol' }) }
     if (JSON.stringify(inspected.requestContext) !== JSON.stringify(parsed)) return failure({ code: 'invalid_operation_fact', message: '补充问题与实际模型控制事件不一致。', stage: 'protocol' })
+    if (this.disposed || ![...this.registrations.values(), ...this.batchRegistrations.values()].includes(registration)) return failure(errorInfo.scope_conflict)
+    const operationOwner = this.operationOwners.get(operationKey(ref.scope))
+    if (operationOwner && operationOwner !== registration) return failure(errorInfo.scope_conflict)
     const result = this.store.register(ref.scope.mainSessionId, ref, parsed)
     if (typeof result === 'string') return failure(errorInfo[result])
     this.operationOwners.set(operationKey(ref.scope), registration)
@@ -246,7 +301,14 @@ export class TranslationExchangeHostService implements TranslationExchangeServic
   }
 
   async notifyMainAgent(owner: Context, ref: NeedsContextReference): Promise<boolean> {
-    const registration = this.registrations.get(owner)
+    return this.notifyContext(this.registrations.get(owner), ref)
+  }
+
+  async notifyBatchMainAgent(owner: Context, ref: NeedsContextReference): Promise<boolean> {
+    return this.notifyContext(this.batchRegistrations.get(owner), ref)
+  }
+
+  private async notifyContext(registration: Registration | undefined, ref: NeedsContextReference): Promise<boolean> {
     if (!registration || this.disposed || ref.hostGeneration !== this.hostGeneration) return false
     const exact = [...this.operationOwners.entries()].find(([key, value]) => key === operationKey(ref.scope) && value === registration)
     if (!exact) return false
@@ -259,7 +321,14 @@ export class TranslationExchangeHostService implements TranslationExchangeServic
   }
 
   async finishOperation(owner: Context, ref: ExecutorOperationRef, result: 'completed' | 'needs_context' | 'unknown' | 'cancelled'): Promise<DomainResult<ExchangeView>> {
-    const registration = this.registrations.get(owner)
+    return this.finishContext(this.registrations.get(owner), ref, result)
+  }
+
+  async finishBatchOperation(owner: Context, ref: ExecutorOperationRef, result: 'completed' | 'needs_context' | 'unknown' | 'cancelled'): Promise<DomainResult<ExchangeView>> {
+    return this.finishContext(this.batchRegistrations.get(owner), ref, result)
+  }
+
+  private async finishContext(registration: Registration | undefined, ref: ExecutorOperationRef, result: 'completed' | 'needs_context' | 'unknown' | 'cancelled'): Promise<DomainResult<ExchangeView>> {
     if (!registration || this.disposed || ref.hostGeneration !== this.hostGeneration) return failure(errorInfo.scope_conflict)
     const key = operationKey(ref), activeRegistration = this.operationOwners.get(key)
     if (activeRegistration !== registration) return failure(errorInfo.scope_conflict)
@@ -273,7 +342,14 @@ export class TranslationExchangeHostService implements TranslationExchangeServic
   }
 
   resumeStarted(owner: Context, ref: ExecutorOperationRef, resolutionId: string): void {
-    const registration = this.registrations.get(owner)
+    this.startResume(this.registrations.get(owner), ref, resolutionId)
+  }
+
+  batchResumeStarted(owner: Context, ref: ExecutorOperationRef, resolutionId: string): void {
+    this.startResume(this.batchRegistrations.get(owner), ref, resolutionId)
+  }
+
+  private startResume(registration: Registration | undefined, ref: ExecutorOperationRef, resolutionId: string): void {
     if (!registration || this.operationOwners.get(operationKey(ref)) !== registration || ref.hostGeneration !== this.hostGeneration || !ref.exchangeId) return
     this.store.resumeStarted(ref.mainSessionId, ref.exchangeId, resolutionId, ref.callId, ref.contextVersion)
   }
@@ -288,6 +364,14 @@ export class TranslationExchangeHostService implements TranslationExchangeServic
       exchange: executorReady ? capability('available', 1, null) : capability('unavailable', null, 'executor_adapter_unavailable'),
       modelControl: this.mainAgents.available ? capability('available', 1, null) : capability('unavailable', null, 'main_agent_route_unavailable'),
     } } }
+  }
+
+  batchCapabilities(): BatchExchangeCapabilities {
+    const routeReady = !this.disposed && this.mainAgents.available
+    const capability = (ready: boolean, reason: string) => ({ state: ready ? 'available' as const : 'unavailable' as const,
+      version: ready ? BATCH_PROTOCOL : null, reason: ready ? null : routeReady ? reason : 'main_agent_route_unavailable' })
+    return { batchProtocol: BATCH_PROTOCOL, exchange: capability(routeReady && this.batchRegistrations.size > 0, 'batch_executor_unavailable'),
+      taskPhase: capability(routeReady && this.batchPhaseRegistrations.size > 0, 'batch_task_phase_inspector_unavailable') }
   }
 
   async query(request: ExchangeRequest): Promise<DomainResult<ExchangeView>> {
@@ -319,7 +403,8 @@ export class TranslationExchangeHostService implements TranslationExchangeServic
 
   dispose(): void {
     if (this.disposed) return
-    this.disposed = true; this.mainAgents.dispose(); this.registrations.clear(); this.operationOwners.clear(); this.phaseRegistrations.clear(); this.phaseRecords.clear()
+    this.disposed = true; this.mainAgents.dispose(); this.registrations.clear(); this.batchRegistrations.clear(); this.operationOwners.clear();
+    this.phaseRegistrations.clear(); this.batchPhaseRegistrations.clear(); this.phaseRecords.clear()
   }
 
   readForAgent(agent: Agent, request: Omit<ExchangeRequest, 'mainSessionId'>): DomainResult<ExchangeAgentRead> {
@@ -366,17 +451,25 @@ export class TranslationExchangeHostService implements TranslationExchangeServic
     if (replay !== undefined) return typeof replay === 'string' ? failure(errorInfo[replay]) : { ok: true, value: view(replay) }
     if (existing.version !== fullRequest.expectedVersion) return failure(errorInfo.version_conflict)
     if (!['open', 'waiting_user'].includes(existing.status)) return failure(errorInfo.invalid_state)
+    if (resolution.kind === 'answer' && existing.userStopped) return failure(errorInfo.invalid_state)
     if (resolution.kind === 'answer' && existing.budgetUsed > 0) return failure(errorInfo.budget_exhausted)
     const adapter = registration.adapter
     const ref = this.operationRef(existing)
     let phase: 'prepare' | 'register' | 'dispatch' = 'prepare'
     try {
       const prepared = await adapter.prepareResume(ref, resolutionId, fullRequest.expectedVersion, resolution)
+      if (this.disposed || this.operationOwners.get(operationKey(fullRequest)) !== registration ||
+        resolution.kind === 'answer' && this.store.get(fullRequest.mainSessionId, existing.exchangeId)?.userStopped) return failure(errorInfo.invalid_state)
       // Preparation is side-effect free. CAS is checked again after it, before Client registration.
       const resolved = this.store.resolve(fullRequest.mainSessionId, fullRequest, resolutionId, resolution)
       if (typeof resolved === 'string') return failure(errorInfo[resolved])
       phase = 'register'
       const registered = await adapter.registerResume(prepared)
+      if (this.disposed || this.operationOwners.get(operationKey(fullRequest)) !== registration ||
+        resolution.kind === 'answer' && this.store.get(fullRequest.mainSessionId, existing.exchangeId)?.userStopped) {
+        this.store.markUnknown(fullRequest.mainSessionId, existing.exchangeId)
+        return failure({ code: 'resume_registration_unknown', message: '续作登记期间执行端已卸载或用户已停止，未派发新调用。', stage: 'writeback' })
+      }
       if (registered.candidateCallId !== prepared.candidateCallId || registered.contextVersion !== prepared.contextVersion || !Number.isSafeInteger(registered.lastSequence) ||
         registered.lastSequence < ref.lastSequence || prepared.contextVersion !== ref.contextVersion + Number(resolution.kind === 'answer')) {
         this.store.markUnknown(fullRequest.mainSessionId, resolved.exchangeId)

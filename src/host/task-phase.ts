@@ -1,4 +1,4 @@
-import type { TaskPhaseEvent } from '../shared/contracts.js'
+import type { BatchTaskPhaseEvent, TaskPhaseEvent } from '../shared/contracts.js'
 
 function object(value: unknown, keys: readonly string[]): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new TypeError('invalid_task_phase')
@@ -28,6 +28,21 @@ export function parseTaskPhaseEvent(value: unknown): TaskPhaseEvent {
     operationId: id(event.operationId), phase: event.phase as TaskPhaseEvent['phase'],
     result: { kind: 'analysis', analysisId: id(result.analysisId), version: version(result.version), sourceVersion: version(result.sourceVersion),
       material: { requestId: id(material.requestId), materialId: id(material.materialId) } }, coverageComplete: event.coverageComplete }
+  if (parsed.scope.ownerId !== parsed.scope.mainSessionId || new TextEncoder().encode(JSON.stringify(parsed)).byteLength > 32768) throw new TypeError('invalid_task_phase_scope')
+  return parsed
+}
+
+/** Document phases carry only the exact task/source revision and sequence, never content. */
+export function parseBatchTaskPhaseEvent(value: unknown): BatchTaskPhaseEvent {
+  const event = object(value, ['eventId', 'hostGeneration', 'scope', 'operationId', 'phase', 'result'])
+  const scope = object(event.scope, ['ownerId', 'mainSessionId', 'topicId', 'translationSessionId'])
+  const result = object(event.result, ['kind', 'taskId', 'unitId', 'sourceVersion', 'version', 'taskSequence'])
+  if (result.kind !== 'task' || !['document_context_required', 'document_dependencies_changed', 'document_review_required'].includes(String(event.phase))) throw new TypeError('invalid_batch_task_phase')
+  const parsed: BatchTaskPhaseEvent = { eventId: id(event.eventId, 8192), hostGeneration: id(event.hostGeneration),
+    scope: { ownerId: id(scope.ownerId), mainSessionId: id(scope.mainSessionId), topicId: id(scope.topicId), translationSessionId: id(scope.translationSessionId) },
+    operationId: id(event.operationId), phase: event.phase as BatchTaskPhaseEvent['phase'],
+    result: { kind: 'task', taskId: id(result.taskId), unitId: id(result.unitId), sourceVersion: version(result.sourceVersion),
+      version: version(result.version), taskSequence: version(result.taskSequence) } }
   if (parsed.scope.ownerId !== parsed.scope.mainSessionId || new TextEncoder().encode(JSON.stringify(parsed)).byteLength > 32768) throw new TypeError('invalid_task_phase_scope')
   return parsed
 }

@@ -5,7 +5,7 @@ import type { UserMessage } from '@deepseek-ai/dsh-llm/types'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import type { SessionController } from '@deepseek-ai/dsh-api-session-controller'
 import type { SessionEvent } from '@deepseek-ai/dsh-session/types'
-import type { ExchangeResolution, ExchangeRequest, TaskPhaseEvent, TranslationExchangeService } from '../shared/contracts.js'
+import type { BatchTaskPhaseEvent, ExchangeResolution, ExchangeRequest, TaskPhaseEvent, TranslationExchangeService } from '../shared/contracts.js'
 
 declare module '@deepseek-ai/dsh-llm/types' {
   interface MessageSourceMap {
@@ -43,7 +43,7 @@ export interface MainAgentRouteHost {
   userStopped(agent: Agent, turn: number): void
   notificationCurrent(agent: Agent, exchangeId: string, messageId: string): boolean
   readonly taskPhase?: {
-    read(agent: Agent, eventId: string): Promise<TaskPhaseEvent | null>
+    read(agent: Agent, eventId: string): Promise<TaskPhaseEvent | BatchTaskPhaseEvent | null>
     enqueued(agent: Agent, eventId: string, messageId: string): boolean
     claimed(agent: Agent, eventId: string, messageId: string, turn: number): void
     discarded(agent: Agent, eventId: string, messageId: string): void
@@ -108,7 +108,7 @@ export class MainAgentRoute {
   owns(agent: Agent): boolean { return this.mounted.get(String(agent.id))?.agent === agent }
 
   /** A preparation notice uses the same native main-Agent queue, with its own fact and source. */
-  async notifyTaskPhase(event: TaskPhaseEvent): Promise<boolean> {
+  async notifyTaskPhase(event: TaskPhaseEvent | BatchTaskPhaseEvent): Promise<boolean> {
     if (this.disposed || !this.host.taskPhase) return false
     const mainSessionId = event.scope.mainSessionId
     const result = await this.host.controller.resolveAgent(mainSessionId as Agent['id'])
@@ -120,13 +120,20 @@ export class MainAgentRoute {
     if (stoppedTurn !== undefined) { this.host.userStopped(agent, stoppedTurn); return false }
     const fact = await this.host.taskPhase.read(agent, event.eventId)
     if (!fact || this.disposed || !this.owns(agent) || this.stopped.has(mainSessionId)) return false
-    const outcome = fact.phase === 'terminology_analysis_completed'
-      ? fact.coverageComplete ? '分析完成，需译范围覆盖完整。' : '请求的局部分析完成，整篇准备覆盖尚未完成。'
-      : fact.phase === 'terminology_analysis_failed' ? '分析已明确失败。' : '分析调用结果未知；请查询原调用，不得自动重新派发。'
-    const reference = { target: { kind: 'material', mainSessionId, ...fact.result.material, sourceVersion: fact.result.sourceVersion }, analysisId: fact.result.analysisId,
-      version: fact.result.version, operationId: fact.operationId, coverageComplete: fact.coverageComplete }
-    const message = createUserMessage({ content: [{ type: 'text', text:
-      `Composer 术语分析阶段通知。${outcome}请使用 translation_analysis_status 核对已固定材料的分析引用，使用 translation_analysis_read 按页读取候选、覆盖和调用记录，再继续处理原用户任务。阶段通知本身不表示准备包或整篇翻译已完成。\n${JSON.stringify(reference)}` }],
+    let content: string
+    if ('coverageComplete' in fact) {
+      const outcome = fact.phase === 'terminology_analysis_completed'
+        ? fact.coverageComplete ? '分析完成，需译范围覆盖完整。' : '请求的局部分析完成，整篇准备覆盖尚未完成。'
+        : fact.phase === 'terminology_analysis_failed' ? '分析已明确失败。' : '分析调用结果未知；请查询原调用，不得自动重新派发。'
+      const reference = { target: { kind: 'material', mainSessionId, ...fact.result.material, sourceVersion: fact.result.sourceVersion }, analysisId: fact.result.analysisId,
+        version: fact.result.version, operationId: fact.operationId, coverageComplete: fact.coverageComplete }
+      content = `Composer 术语分析阶段通知。${outcome}请使用 translation_analysis_status 核对已固定材料的分析引用，使用 translation_analysis_read 按页读取候选、覆盖和调用记录，再继续处理原用户任务。阶段通知本身不表示准备包或整篇翻译已完成。\n${JSON.stringify(reference)}`
+    } else {
+      const outcome = fact.phase === 'document_context_required' ? '文档任务存在需要处理的关键疑点。'
+        : fact.phase === 'document_dependencies_changed' ? '文档任务的准备或术语依赖发生变化。' : '整篇候选已到需要语义复核的阶段。'
+      content = `Composer 文档任务阶段通知。${outcome}请使用 translation_batch_status 核对固定任务、源版本和任务序号，查询实际问题或候选后继续原用户任务。未知调用只查询原事实；此通知不授权重新派发或自动定稿。\n${JSON.stringify({ scope: fact.scope, operationId: fact.operationId, result: fact.result })}`
+    }
+    const message = createUserMessage({ content: [{ type: 'text', text: content }],
       source: { kind: 'dsh-composer-task-phase', eventId: fact.eventId } })
     if (!this.host.taskPhase.enqueued(agent, fact.eventId, message.id)) return false
     this.mounted.get(mainSessionId)!.phaseMessages.set(message.id, fact.eventId)
@@ -268,6 +275,8 @@ export class MainAgentRoute {
       if (subject !== agent || decision.kind === 'reject' || decision.messages.length === 0) return decision
       const retained = []
       for (const message of decision.messages) {
+        if (message.source.kind === 'dsh-composer-exchange' &&
+          !this.host.notificationCurrent(agent, message.source.exchangeId, message.id)) continue
         if (message.source.kind === 'dsh-composer-task-phase' &&
           !await this.host.taskPhase?.current(agent, message.source.eventId, message.id)) continue
         retained.push(message)
