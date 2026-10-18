@@ -131,14 +131,23 @@ export class MainAgentRoute {
     } else {
       const outcome = fact.phase === 'document_context_required' ? '文档任务存在需要处理的关键疑点。'
         : fact.phase === 'document_dependencies_changed' ? '文档任务的准备或术语依赖发生变化。' : '整篇候选已到需要语义复核的阶段。'
-      content = `Composer 文档任务阶段通知。${outcome}请使用 translation_batch_status 核对固定任务、源版本和任务序号，查询实际问题或候选后继续原用户任务。未知调用只查询原事实；此通知不授权重新派发或自动定稿。\n${JSON.stringify({ scope: fact.scope, operationId: fact.operationId, result: fact.result })}`
+      // Completion is the only phase that asks for the task-term report; other phases must not imply it.
+      const terms = fact.phase === 'document_review_required'
+        ? '本轮完成后在主会话回复中列出本任务实际采用的术语（原词→译法，最多 20 条）并询问是否写入主题；只有用户明确同意后才可调用 translation_batch_task_terms 的 apply=true 写入待确认条目，不得自动沉淀或改写用户固定规则。若已不掌握采用的术语，先加载 document_terms 并以 apply=false 读取。'
+        : ''
+      content = `Composer 文档任务阶段通知。${outcome}${terms}请使用 translation_batch_status 核对固定任务、源版本和任务序号，查询实际问题或候选后继续原用户任务。未知调用只查询原事实；此通知不授权重新派发或自动定稿。\n${JSON.stringify({ scope: fact.scope, operationId: fact.operationId, result: fact.result })}`
     }
     const message = createUserMessage({ content: [{ type: 'text', text: content }],
       source: { kind: 'dsh-composer-task-phase', eventId: fact.eventId } })
     if (!this.host.taskPhase.enqueued(agent, fact.eventId, message.id)) return false
     this.mounted.get(mainSessionId)!.phaseMessages.set(message.id, fact.eventId)
-    try { agent.followup(message); return true }
-    catch {
+    try {
+      // Running: consume at the nearest step boundary without opening an unrelated turn.
+      // Idle: wake one next-turn; never inject alone, which would leave the notice parked.
+      if (agent.status === 'running' && typeof agent.steer === 'function') agent.steer(message)
+      else agent.followup(message)
+      return true
+    } catch {
       this.mounted.get(mainSessionId)?.phaseMessages.delete(message.id)
       this.host.taskPhase.discarded(agent, fact.eventId, message.id)
       return false

@@ -1,19 +1,97 @@
 # dsh-composer-extension
 
-An early-stage DSH extension for coordinating the native Composer, its owning main Agent, and a translation executor.
+[English](README.md) | [简体中文](README.zh-CN.md)
 
-The Client entry registers frozen Composer contributions only when the patched DSH seam explicitly reports protocol 1. The Host installs read, resolve and status tools into the actual owning Agent, queues one next-turn notice after the translation Client confirms a question, and allows one automatic resumed call for that operation. Exchange state is transient in the Host; question and answer history belongs to the translation plugin. The translation model can request context only through its restricted `request_context` tool when its DSH route supports tool calls and the matching translation adapter is registered.
+Linked material submission and task coordination for the main chat input in DeepSeek Harness (DSH), helping the main model and translation plugin work on the same request.
 
-The Host also exposes an additive in-process task-phase service under `phaseProtocol` 1. Owners register with `registerTaskPhaseInspector`, query readiness with `taskPhaseCapabilities`, and submit a short event with `notifyTaskPhase`; the registered inspector verifies the result before the extension queues one deduplicated notice to the exact owning main Agent. Notices carry operation and result references for follow-up queries, not source text or result tables. This extension contract is separate from Composer protocol 1, Exchange protocol 1, Normal protocol 2 and Remote v1, and is not an official DSH API. Notices are discarded if the user has stopped the main Agent. Without a registered phase inspector or an available main-Agent route, the extension reports the phase notification as unavailable.
+Prepare source material in the translation workspace, describe requirements in the main chat, and send both together. When supported translation tasks need more background or attention to a critical issue, the extension routes the request back to the appropriate main chat, reducing manual copying and message passing.
 
-Document batches separately negotiate `batchProtocol` 1. Owners register an executor with `registerBatch`, a task inspector with `registerBatchTaskPhaseInspector`, and check context exchange and phase readiness separately with `batchCapabilities`. The same Owner can keep its normal text executor and analysis inspector registered. Batch questions use the existing exchange tools and main-Agent queue. Child operations reference the real document unit, child operation, call, context version, Host generation and event sequence; the translation plugin owns exact range conversion and the automatic supplement budgets of one per chunk and three per document task. Missing batch exchange support uses `text_only`.
+## What problem does it solve?
 
-`notifyBatchTaskPhase` accepts only short task references for critical questions, dependency changes or whole-candidate review, carrying the fixed owner scope, taskId, unitId, sourceVersion, task version and taskSequence. The inspector checks the fact before enqueueing and before delivering it to the main model. Ordinary chunk completion does not emit a phase notice. When the user stops the main Agent, a fact becomes stale or an Owner unloads, the extension removes its stale notices while preserving user text in mixed queues. Stop or unload during supplement registration prevents dispatch.
+- **Source material and instructions get separated**: submit prepared translation material with the main-chat message.
+- **Translation may need more background**: let the translation model ask the main model for context in supported tasks.
+- **Background work gets disconnected from the chat**: notify the owning main model at integrated task stages, reducing manual progress checking and result handoffs.
 
-The Composer seam requires a matching patched DSH build; stock `0.2.0-rc.2` does not provide it. Native integration checks use synthetic providers. The full P0 matrix and real desktop/model combinations are not yet verified, so this package is still a development candidate.
+This is a companion extension, not a standalone translator. The translation plugin manages execution, session history, translation versions, and memory assets. This extension does not provide another translation workspace.
 
-The matching translation plugin is v0.19.0. Document batch control and context exchange are development-stage capabilities; whole-document quality review and final delivery remain for later stages. Context exchange requires a negotiated normal protocol v2; older connections retain text execution. A late context request does not wake the main Agent after the user stops it. Lost registration acknowledgements and Host reloads are reconciled by querying recorded facts; unknown operations never automatically call the model again. For terminology-analysis phase notices, the translation plugin registers a separate `phaseProtocol` 1 inspector; older extension versions retain query access but cannot enqueue those notices. Batch support is negotiated through separate in-process ports without changing Remote v1 receipts or codecs. Use the [Host patch](patches/rc2-composer-submissions-v1.patch) and [version and checksums](patches/source-manifest.json) to build the matching Host.
+## What it can do today
 
-Read [CONTRIBUTING.md](CONTRIBUTING.md) before contributing. Test files are for local verification and must not be committed. Commit checks reject cases, fixtures, snapshots, SDK probes and integration test scripts. Prepare these files and the required DSH components locally when running checks.
+| Capability | Current role |
+| --- | --- |
+| Linked submission | Connect the main chat input with the translation workspace to submit instructions and prepared material together. |
+| Context requests | Route translation questions to the owning main model when supported by the translation plugin and selected model. |
+| Key-stage notices | Deliver messages requiring main-model attention for integrated analysis or document tasks. |
+| Stop and stale-task handling | Avoid waking a user-stopped main model for late requests, and prevent stale notices from being treated as current tasks. |
 
-Requires Node.js 22 or later for development. Runtime packages are supplied by a matching DSH build; this package does not bundle another Cordis or DSH runtime. The library tarball is not a Windows update package. Desktop delivery requires a matching DSH build and a separate backup, install, and rollback process. See [the Chinese README](README.zh-CN.md) for the same status in Chinese.
+Available features depend on the DSH build, translation plugin, and selected models. Installing the extension does not mean that it schedules every background task, nor does it guarantee translation speed or quality.
+
+The project is still in development. Complete desktop workflows and different model combinations need confirmation in the actual environment.
+
+## Requirements
+
+- A companion DSH build supporting the extension; the current environment is based on `0.2.0-rc.2`.
+- A matching `dsh-translation-plugin` providing the workspace and translation tasks.
+- Configured models in DSH. Context requests from the translation model also require tool-call support in that model.
+- Node.js 22 or later and pnpm to build from source.
+
+**Official, unmodified DSH `0.2.0-rc.2` does not provide linked material submission. Installing this extension alone does not add it; a companion DSH build is required.** Host build materials are available in the [companion patch](patches/rc2-composer-submissions-v1.patch) and [version information](patches/source-manifest.json). The extension is not a DSH desktop installer and does not automatically modify or upgrade the desktop application.
+
+## Installation and updates
+
+### Install
+
+1. Prepare the companion DSH environment and extension source. In this repository, run:
+
+   ```powershell
+   pnpm install --frozen-lockfile
+   pnpm build
+   ```
+
+2. In DSH's plugin manager, install this directory as a local plugin named `dsh-composer-extension` and enable it.
+3. Install and enable a matching translation plugin, then restart DSH.
+4. Open the translation workspace and confirm that Normal mode does not report missing material-submission support.
+
+### Update
+
+1. Save work you want to retain in the translation plugin and back up important material.
+2. Update the extension source, reinstall dependencies, and build again.
+3. Refresh or reload the extension in the plugin manager and restart DSH. If there is no refresh action, uninstall and reinstall the same directory.
+
+Check compatibility between the extension, translation plugin, and DSH build when updating. Do not treat a restart as automatic recovery while work is running or its outcome is unknown. The extension does not persist recoverable tasks across restarts, and reloading does not automatically repeat model requests.
+
+See [CHANGELOG](CHANGELOG.md) for version changes.
+
+## User guide
+
+### 1. Send material and instructions together
+
+Choose Normal mode in the translation plugin, enter source text or select a supported source file, then write the current requirements in the main chat input and send.
+
+The material accompanies that message, and the main model arranges processing according to your intent. Use the translation input for source material and the main chat for instructions, discussion, and revision requests. To send only a chat message this time, select **本次不附带 (Do not attach this time)** where offered by the translation plugin.
+
+Submission retains the source as sent. Editing the next draft does not rewrite it. Use the translation plugin to inspect results, correct source material, or retranslate.
+
+### 2. Handle questions during translation
+
+In tasks supporting context requests, the translation model can ask for missing background or context. The main model may provide a supplement, defer to the user, or stop the operation.
+
+Automatic exchanges are limited, rather than an unlimited discussion loop. If processing cannot continue, provide the necessary information in the main chat and check the task state shown by the translation plugin. Not every file task or model combination supports context requests.
+
+### 3. When background work needs attention
+
+Integrated tasks notify the owning main model about critical questions, changed material, or results needing review. They do not send a notice for every completed chunk. The main model continues from the actual task without requiring a repeated user instruction at each step.
+
+After you stop the main model, late notices do not substitute for a new user instruction. Check the original task before retrying an unknown outcome. Background results and history remain available in the translation plugin.
+
+### 4. When a feature is unavailable
+
+- **Linked submission is unavailable**: check the companion DSH build, confirm both plugins are enabled, and restart DSH.
+- **No context request appears**: the current model or task may not support it; this alone does not indicate translation failure.
+- **No stage notice appears**: not all background workflows use this extension. Inspect progress and errors in the translation plugin instead of resubmitting solely because the main chat is quiet.
+- **Work does not continue after restart**: the extension does not automatically restore temporary exchanges. Check the original task in the translation plugin before explicitly choosing the next action.
+
+## Contributing and license
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution instructions and [AGENTS.md](AGENTS.md) for project rules.
+
+Licensed under [MIT](LICENSE).
