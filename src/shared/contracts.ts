@@ -5,7 +5,7 @@ import type { SessionId } from '@deepseek-ai/dsh-session/types'
 export const COMPOSER_PROTOCOL = 1 as const
 export const EXCHANGE_PROTOCOL = 1 as const
 export const NORMAL_PROTOCOL = 2 as const
-export const TASK_PHASE_PROTOCOL = 1 as const
+export const TASK_PHASE_PROTOCOL = 2 as const
 export const BATCH_PROTOCOL = 1 as const
 
 export type CapabilityState = 'available' | 'unavailable' | 'unknown'
@@ -149,7 +149,6 @@ export interface ComposerExtensionService {
 }
 
 export interface TaskPhaseScope {
-  readonly ownerId: string
   readonly mainSessionId: string
   readonly topicId: string
   readonly translationSessionId: string

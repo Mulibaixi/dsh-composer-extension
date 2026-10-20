@@ -30,7 +30,7 @@ The project is still in development. Complete desktop workflows and different mo
 ## Requirements
 
 - A companion DSH build supporting the extension; the current environment is based on `0.2.0-rc.2`.
-- A matching `dsh-translation-plugin` providing the workspace and translation tasks.
+- A companion build of `dsh-translation-plugin` providing the workspace and translation tasks. The companion builds use content protocol 3 and task-phase protocol 2.
 - Configured models in DSH. Context requests from the translation model also require tool-call support in that model.
 - Node.js 22 or later and pnpm to build from source.
 
@@ -54,7 +54,7 @@ The project is still in development. Complete desktop workflows and different mo
 ### Update
 
 1. Save work you want to retain in the translation plugin and back up important material.
-2. Update the extension source, reinstall dependencies, and build again.
+2. Update both source directories and reinstall dependencies. Build the Composer extension first, then the translation plugin.
 3. Refresh or reload the extension in the plugin manager and restart DSH. If there is no refresh action, uninstall and reinstall the same directory.
 
 Check compatibility between the extension, translation plugin, and DSH build when updating. Do not treat a restart as automatic recovery while work is running or its outcome is unknown. The extension does not persist recoverable tasks across restarts, and reloading does not automatically repeat model requests.
@@ -66,6 +66,8 @@ See [CHANGELOG](CHANGELOG.md) for version changes.
 ### 1. Send material and instructions together
 
 Choose Normal mode in the translation plugin, enter source text or select a supported source file, then write the current requirements in the main chat input and send.
+
+Use the same translation session and saved material from different main chats. The model in the chat where you send the message handles the current submission.
 
 The material accompanies that message, and the main model arranges processing according to your intent. Use the translation input for source material and the main chat for instructions, discussion, and revision requests. To send only a chat message this time, select **本次不附带 (Do not attach this time)** where offered by the translation plugin.
 
@@ -80,6 +82,8 @@ Automatic exchanges are limited, rather than an unlimited discussion loop. If pr
 ### 3. When background work needs attention
 
 Integrated tasks notify the owning main model about critical questions, changed material, or results needing review. They do not send a notice for every completed chunk. The main model continues from the actual task without requiring a repeated user instruction at each step.
+
+After switching main chats, context requests and notices for existing tasks still go to the chat that started the task.
 
 After you stop the main model, late notices do not substitute for a new user instruction. Check the original task before retrying an unknown outcome. Background results and history remain available in the translation plugin.
 
