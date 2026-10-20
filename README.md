@@ -29,12 +29,12 @@ The project is still in development. Complete desktop workflows and different mo
 
 ## Requirements
 
-- A companion DSH build supporting the extension; the current environment is based on `0.2.0-rc.2`.
+- A companion DSH `0.2.0-rc.2` or `0.2.1-rc.2` build supporting the extension.
 - A companion build of `dsh-translation-plugin` providing the workspace and translation tasks. The companion builds use content protocol 3 and task-phase protocol 2.
 - Configured models in DSH. Context requests from the translation model also require tool-call support in that model.
 - Node.js 22 or later and pnpm to build from source.
 
-**Official, unmodified DSH `0.2.0-rc.2` does not provide linked material submission. Installing this extension alone does not add it; a companion DSH build is required.** Host build materials are available in the [companion patch](patches/rc2-composer-submissions-v1.patch) and [version information](patches/source-manifest.json). The extension is not a DSH desktop installer and does not automatically modify or upgrade the desktop application.
+**Official, unmodified DSH does not provide linked material submission in either supported version. Installing this extension alone does not add it; a matching host patch is required.** Use the [0.2.0-rc.2 patch](patches/rc2-composer-submissions-v1.patch) with its [source manifest](patches/source-manifest.json), or the [0.2.1-rc.2 patch](patches/dsh-0.2.1-rc.2-composer-submissions-v1.patch) with its [source manifest](patches/source-manifest-0.2.1-rc.2.json). Rebuild and apply the matching patch after a DSH upgrade. The extension does not modify or upgrade the desktop application automatically.
 
 ## Installation and updates
 
