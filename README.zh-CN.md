@@ -29,12 +29,12 @@
 
 ## 环境与依赖
 
-- 支持本扩展的配套 DSH `0.2.0-rc.2` 或 `0.2.1-rc.2` 构建。
+- 支持本扩展的配套 DSH `0.2.0-rc.2`、`0.2.1-rc.2` 或 `0.2.1-rc.3` 构建。
 - 与本扩展配套构建的 `dsh-translation-plugin`，提供翻译工作区和实际任务。当前配套使用内容协议 3 和任务阶段协议 2。
 - 在 DSH 中配置可用模型；翻译模型主动请求补充信息还需要该模型支持工具调用。
 - 从源码构建需要 Node.js 22 或更高版本及 pnpm。
 
-**两个受支持版本的官方原版 DSH 均不提供所需的联动发送能力。只安装本扩展不能补齐这一能力，还需要匹配的宿主补丁。** 根据宿主版本使用 [0.2.0-rc.2 补丁](patches/rc2-composer-submissions-v1.patch)及其[源码清单](patches/source-manifest.json)，或 [0.2.1-rc.2 补丁](patches/dsh-0.2.1-rc.2-composer-submissions-v1.patch)及其[源码清单](patches/source-manifest-0.2.1-rc.2.json)。升级 DSH 后需重新构建并应用对应补丁；扩展不会自动修改或升级桌面客户端。
+**受支持版本的官方原版 DSH 均不提供所需的联动发送能力。只安装本扩展不能补齐这一能力，还需要匹配的宿主补丁。** 根据宿主版本使用 [0.2.0-rc.2 补丁](patches/rc2-composer-submissions-v1.patch)及其[源码清单](patches/source-manifest.json)、[0.2.1-rc.2 补丁](patches/dsh-0.2.1-rc.2-composer-submissions-v1.patch)及其[源码清单](patches/source-manifest-0.2.1-rc.2.json)，或 [0.2.1-rc.3 补丁](patches/dsh-0.2.1-rc.3-composer-submissions-v1.patch)及其[源码清单](patches/source-manifest-0.2.1-rc.3.json)。升级 DSH 后需重新构建并应用对应补丁；扩展不会自动修改或升级桌面客户端。
 
 ## 安装与更新
 

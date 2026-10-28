@@ -1,0 +1,463 @@
+diff --git a/packages/api/session-controller/src/client/contract/session.ts b/packages/api/session-controller/src/client/contract/session.ts
+--- a/packages/api/session-controller/src/client/contract/session.ts
++++ b/packages/api/session-controller/src/client/contract/session.ts
+@@ -30,6 +30,8 @@
+ 
+ /** Input registering one local submission echo ahead of its prompt call. */
+ export interface BeginSubmissionInput {
++  /** Identity reserved by the original Composer at the synchronous gesture boundary. */
++  readonly requestId?: SessionRequestId
+   /** Delivery mode used with the upcoming prompt. */
+   readonly mode: 'queue' | 'steer'
+   /** Prompt text exactly as the upcoming prompt will send it. */
+diff --git a/packages/api/session-controller/src/client/sessions/session.ts b/packages/api/session-controller/src/client/sessions/session.ts
+--- a/packages/api/session-controller/src/client/sessions/session.ts
++++ b/packages/api/session-controller/src/client/sessions/session.ts
+@@ -226,7 +226,7 @@
+    * @returns the minted identity for {@link prompt} plus the pre-prompt abandon path.
+    */
+   beginSubmission(input: BeginSubmissionInput): SubmissionHandle {
+-    const requestId = randomUUID() as SessionRequestId
++    const requestId = input.requestId ?? randomUUID() as SessionRequestId
+     const placement = this.running ? input.mode === 'steer' ? 'steering' : 'queued' : 'transcript'
+     this.pendingSubmissions = [...this.pendingSubmissions, {
+       requestId,
+diff --git a/packages/client/ui-conversation/src/client/contract/submissions.ts b/packages/client/ui-conversation/src/client/contract/submissions.ts
+new file mode 100644
+--- /dev/null
++++ b/packages/client/ui-conversation/src/client/contract/submissions.ts
+@@ -0,0 +1,39 @@
++import type { Context } from '@deepseek-ai/cordis'
++import type { SessionRequestId } from '@deepseek-ai/dsh-api-session-controller/types'
++import type { SessionId } from '@deepseek-ai/dsh-session/types'
++import type { InputSubmitMode } from './composer-submission.ts'
++
++/** Gesture facts fixed synchronously before command arbitration and reference serialization. */
++export interface ComposerSubmissionGesture {
++  readonly sessionId: SessionId
++  readonly requestId: SessionRequestId
++  readonly mode: InputSubmitMode
++  readonly timestamp: number
++  readonly source?: 'click' | 'enter'
++  /** The main Composer revision; independent business drafts have their own revisions. */
++  readonly draftRev: number
++}
++
++/** Host admission is distinct from a plugin's subsequent business acceptance. */
++export type ComposerSubmissionOutcome = 'accepted' | 'failed' | 'handled' | 'cancelled' | 'unknown'
++
++/** An immutable business snapshot is retained by this closure, never read again from the UI. */
++export interface PreparedComposerContribution {
++  /** Runs only after native arbitration selected an ordinary prompt. Reject to restore the native draft. */
++  prepare(signal: AbortSignal): Promise<void>
++  /** Exactly one settlement; consumed commands never run prepare. Cleanup must not throw. */
++  finish(outcome: ComposerSubmissionOutcome): void
++}
++
++export interface ComposerSubmissionContribution {
++  /** Synchronous: copy business state now; return undefined when the contribution does not apply. */
++  freeze(gesture: ComposerSubmissionGesture): PreparedComposerContribution | undefined
++}
++
++/** Public contribution face; root registration remains active while panels are hidden. */
++export interface ComposerSubmissions {
++  /** Read-only seam version; callers must match an explicitly supported contract. */
++  readonly protocolVersion?: 1
++  /** Owner context disposal unsubscribes and cancels every frozen, unadmitted contribution. */
++  register(owner: Context, contribution: ComposerSubmissionContribution): () => void
++}
+diff --git a/packages/client/ui-conversation/src/client/index.ts b/packages/client/ui-conversation/src/client/index.ts
+--- a/packages/client/ui-conversation/src/client/index.ts
++++ b/packages/client/ui-conversation/src/client/index.ts
+@@ -1,4 +1,6 @@
+ /** Browser Conversation assemble core, React adapter, shell, input, and text projection plugin. */
++export type { ComposerSubmissionContribution, ComposerSubmissionGesture, ComposerSubmissionOutcome,
++  ComposerSubmissions, PreparedComposerContribution } from './contract/submissions.ts'
+ export type {} from './user-text/session-reference-rule.ts'
+ 
+ /** Declaration-merged node payloads; IDs also identify the corresponding keyed renderer. */
+diff --git a/packages/client/ui-conversation/src/client/input/facade.ts b/packages/client/ui-conversation/src/client/input/facade.ts
+--- a/packages/client/ui-conversation/src/client/input/facade.ts
++++ b/packages/client/ui-conversation/src/client/input/facade.ts
+@@ -23,6 +23,8 @@
+   ArbitrateKey, ArbitrateOutcome, ComposerKeyboard, DraftInput, DraftSnapshot, Occurrence, ReferenceInsert, TokenSpan,
+ } from '../contract/draft-editor.ts'
+ import type { InputSubmitMode, MessageSubmission, MessageSubmissionState } from '../contract/composer-submission.ts'
++import type { ComposerSubmissionGesture, ComposerSubmissionOutcome } from '../contract/submissions.ts'
++import type { ComposerSubmissionPreparation } from './submissions.ts'
+ import { SubmitMachine } from './machine.ts'
+ import { resolveDraftInput, snapshotDraft } from '../draft.ts'
+ import { DraftEditorRuntime } from './editor/runtime.ts'
+@@ -41,6 +43,8 @@
+ export interface SessionInputDeps {
+   /** Session-scope ctx handed to claim.submit transactions. */
+   actx: Context
++  /** Runs synchronously before any native arbitration or reference serialization. */
++  freezeSubmission?: (input: Omit<ComposerSubmissionGesture, 'sessionId' | 'requestId'>) => ComposerSubmissionPreparation | undefined
+   /** Snapshot the Session facts before asynchronous command arbitration. */
+   submissionState?: () => MessageSubmissionState
+   /** Notify one ordinary message attempt before reference serialization. */
+@@ -62,6 +66,7 @@
+     attachmentIds: readonly DraftAttachmentId[],
+     mode: InputSubmitMode,
+     signal: AbortSignal,
++    preparation?: ComposerSubmissionPreparation,
+   ): Promise<SubmitOutcome>
+   /** Command-plane attachment plumbing (the hub owns the conversation face and the copy). */
+   commandAttachments: {
+@@ -137,6 +142,7 @@
+   }
+ 
+   private readonly core = new SubmitMachine()
++  private readonly preparations = new Map<MessageSubmission, ComposerSubmissionPreparation>()
+   private readonly draftEditor: DraftEditorRuntime
+   private get projection(): EditorProjection {
+     return this.draftEditor.projection
+@@ -396,9 +402,14 @@
+     if (this.snapshot.phase === 'plain' && (this.snapshot.draft.trim() !== '' || this.attachmentIds.length > 0)) {
+       try { state = this.deps.submissionState?.() } catch (_error) { /* Optional Session observations cannot interrupt submission. */ }
+     }
++    const preparation = this.snapshot.phase === 'plain'
++      && (this.snapshot.draft.trim() !== '' || this.attachmentIds.length > 0)
++      ? this.deps.freezeSubmission?.({ timestamp, mode, draftRev: this.rev, ...source === undefined ? {} : { source } })
++      : undefined
+     const submission: MessageSubmission = Object.freeze({
+       timestamp, mode, ...source === undefined ? {} : { source }, ...state === undefined ? {} : { state },
+     })
++    if (preparation !== undefined) this.preparations.set(submission, preparation)
+     if (this.snapshot.draft.trim() === '' && this.attachmentIds.length > 0) {
+       if (this.snapshot.phase === 'plain') {
+         const attachmentIds = [...this.attachmentIds]
+@@ -408,13 +419,15 @@
+         this.attachmentFlights.set(flight, { controller, attachmentIds })
+         this.commitSend(attachmentIds)
+         this.notifySubmission(submission)
+-        void this.deps.defaultSink('', attachmentIds, mode, controller.signal).then((outcome) => {
++        void this.deps.defaultSink('', attachmentIds, mode, controller.signal, preparation).then((outcome) => {
+           if (this.disposed || !this.attachmentFlights.delete(flight)) return
++          this.finishPreparation(submission, outcome.kind === 'success' ? 'accepted' : 'failed')
+           if (outcome.kind === 'success') return
+           this.restoreAttachments(attachmentIds)
+           if (outcome.text !== undefined) this.notify('error', outcome.text)
+         }, (error: unknown) => {
+           if (this.disposed || !this.attachmentFlights.delete(flight)) return
++          this.finishPreparation(submission, 'failed')
+           this.restoreAttachments(attachmentIds)
+           this.notify('error', error instanceof Error ? error.message : String(error))
+         })
+@@ -618,6 +631,7 @@
+       for (const attachmentId of flight.attachmentIds) retained.add(attachmentId)
+       flight.controller.abort()
+     }
++    for (const submission of [...this.preparations.keys()]) this.finishPreparation(submission, 'cancelled')
+     this.disposed = true
+     this.cancelCommandRestore()
+     this.dispatchRun(({ type: 'release' }))
+@@ -751,7 +765,7 @@
+       this.failedRestoreRev = undefined
+     }
+     if (occurrences.length === 0) {
+-      this.settleSink(attempt, this.deps.defaultSink(draft.trim(), attachmentIds, mode, attempt.signal))
++      this.settleSink(attempt, this.deps.defaultSink(draft.trim(), attachmentIds, mode, attempt.signal, this.preparationOf(attempt.submission)))
+       return
+     }
+     const inputTriggers = this.deps.inputTriggers?.()
+@@ -775,7 +789,7 @@
+           cursor = part.offset + part.length
+         }
+         out += draft.slice(cursor)
+-        this.settleSink(attempt, this.deps.defaultSink(out.trim(), attachmentIds, mode, attempt.signal))
++        this.settleSink(attempt, this.deps.defaultSink(out.trim(), attachmentIds, mode, attempt.signal, this.preparationOf(attempt.submission)))
+       },
+       (error: unknown) => {
+         if (this.dead(attempt)) return
+@@ -783,6 +797,17 @@
+         this.settleDetachedFailure(attempt, message)
+       },
+     )
++  }
++
++  private preparationOf(submission: MessageSubmission | undefined): ComposerSubmissionPreparation | undefined {
++    return submission === undefined ? undefined : this.preparations.get(submission)
++  }
++
++  private finishPreparation(submission: MessageSubmission | undefined, outcome: ComposerSubmissionOutcome): void {
++    const preparation = this.preparationOf(submission)
++    if (preparation === undefined) return
++    if (submission !== undefined) this.preparations.delete(submission)
++    preparation.finish(outcome)
+   }
+ 
+   private notifySubmission(submission: MessageSubmission | undefined): void {
+@@ -802,6 +827,7 @@
+           this.settleDetachedFailure(attempt, outcome.text)
+           return
+         }
++        this.finishPreparation(attempt.submission, 'accepted')
+         this.detachedDrafts.delete(attempt.seq)
+         this.dispatchRun(({ type: 'sink-settled', attempt, ok: true, outcome }))
+       },
+@@ -814,6 +840,7 @@
+ 
+   /** Restore one failed detached send without overwriting text entered after a restoration. */
+   private settleDetachedFailure(attempt: SubmitAttempt, message?: string): void {
++    this.finishPreparation(attempt.submission, 'failed')
+     const record = this.detachedDrafts.get(attempt.seq)
+     if (record === undefined) return
+     this.detachedDrafts.delete(attempt.seq)
+@@ -871,11 +898,13 @@
+     inputTriggers.adjudicate(draft.trim(), attempt.signal, { attachments: this.attachmentIds.length }).then(
+       (outcome: PickOutcome) => {
+         if (this.dead(attempt)) return
++        if (outcome !== undefined) this.finishPreparation(attempt.submission, 'handled')
+         this.dispatchRun(({ type: 'adjudicated', attempt, outcome }))
+       },
+       (error: unknown) => {
+         if (this.dead(attempt)) return
+         const message = error instanceof Error ? error.message : String(error)
++        this.finishPreparation(attempt.submission, 'failed')
+         this.dispatchRun(({ type: 'adjudication-failed', attempt, message }))
+       },
+     )
+diff --git a/packages/client/ui-conversation/src/client/input/hub.ts b/packages/client/ui-conversation/src/client/input/hub.ts
+--- a/packages/client/ui-conversation/src/client/input/hub.ts
++++ b/packages/client/ui-conversation/src/client/input/hub.ts
+@@ -25,6 +25,7 @@
+ import type { PopupDismissFace } from './facade.ts'
+ import { SessionInputShell } from './facade.ts'
+ import { reportMessageSubmission } from './submission-analytics.ts'
++import type { ComposerSubmissionRegistry, ComposerSubmissionPreparation } from './submissions.ts'
+ import { readConversationDraft } from '../stores.ts'
+ 
+ /** Structural command face for per-session popup resolution. */
+@@ -40,12 +41,14 @@
+ 
+ /** Attachment-send face resolved lazily to keep hub/service construction acyclic. */
+ interface ConversationAttachmentFace {
++  readonly submissions: ComposerSubmissionRegistry
+   sendSession(
+     session: SessionFace,
+     text: string,
+     attachmentIds: readonly DraftAttachmentId[],
+     mode: InputSubmitMode,
+     signal?: AbortSignal,
++    preparation?: ComposerSubmissionPreparation,
+   ): Promise<SubmitOutcome>
+   serializeDraftAttachments(attachmentIds: readonly DraftAttachmentId[]): Promise<DraftAttachmentSerializationResult>
+   releaseDraftAttachment(id: DraftAttachmentId): void
+@@ -99,6 +102,9 @@
+     const { session, ctx: actx } = binding
+     const shell = new SessionInputShell({
+       actx,
++      freezeSubmission: input => session.getSnapshot().subagent === null
++        ? this.conversation().submissions.freeze({ sessionId: session.sessionId, ...input })
++        : undefined,
+       submissionState: () => {
+         const state = session.getSnapshot()
+         const model = session.projections.faceOf('modelSelection').getSnapshot() as ModelSelectionProjection | undefined
+@@ -122,7 +128,7 @@
+       inputTriggers: () => this.controller(actx),
+       popup: () => this.popup(actx),
+       inbox: session.projections.faceOf('inbox') as ObservableSnapshot<InboxState | undefined>,
+-      defaultSink: (text, attachmentIds, mode, signal) => this.sink(session, text, attachmentIds, mode, signal),
++      defaultSink: (text, attachmentIds, mode, signal, preparation) => this.sink(session, text, attachmentIds, mode, signal, preparation),
+       steerQueue: () => { void this.steerQueue(session, shell) },
+       commandAttachments: {
+         serialize: async (ids) => {
+@@ -239,9 +245,10 @@
+     attachmentIds: readonly DraftAttachmentId[],
+     mode: InputSubmitMode,
+     signal: AbortSignal,
++    preparation?: ComposerSubmissionPreparation,
+   ): Promise<SubmitOutcome> {
+     if (text === '' && attachmentIds.length === 0) return Promise.resolve({ kind: 'success' })
+-    return this.conversation().sendSession(session, text, attachmentIds, mode, signal)
++    return this.conversation().sendSession(session, text, attachmentIds, mode, signal, preparation)
+   }
+ 
+   /**
+diff --git a/packages/client/ui-conversation/src/client/input/submissions.ts b/packages/client/ui-conversation/src/client/input/submissions.ts
+new file mode 100644
+--- /dev/null
++++ b/packages/client/ui-conversation/src/client/input/submissions.ts
+@@ -0,0 +1,106 @@
++import { randomUUID } from '@deepseek-ai/dsh-util-crypto'
++import type { Context } from '@deepseek-ai/cordis'
++import type { SessionRequestId } from '@deepseek-ai/dsh-api-session-controller/types'
++import type {
++  ComposerSubmissionContribution, ComposerSubmissionGesture, ComposerSubmissionOutcome,
++  ComposerSubmissions, PreparedComposerContribution,
++} from '../contract/submissions.ts'
++
++interface Registration {
++  readonly contribution: ComposerSubmissionContribution
++  readonly active: Set<() => void>
++}
++
++/** Package-private transaction; the shell owns its native settlement. */
++export interface ComposerSubmissionPreparation {
++  readonly requestId: SessionRequestId
++  readonly signal: AbortSignal
++  prepare(signal: AbortSignal): Promise<void>
++  markDispatched(): void
++  finish(outcome: ComposerSubmissionOutcome): void
++}
++
++/** One root registry; independent plugins use only the public registration face. */
++export class ComposerSubmissionRegistry implements ComposerSubmissions {
++  get protocolVersion(): 1 { return 1 }
++  private readonly registrations = new Set<Registration>()
++
++  register(owner: Context, contribution: ComposerSubmissionContribution): () => void {
++    const entry: Registration = { contribution, active: new Set() }
++    this.registrations.add(entry)
++    const off = () => {
++      if (!this.registrations.delete(entry)) return
++      for (const cancel of [...entry.active]) cancel()
++    }
++    owner.effect(() => off, 'conversation submission contribution')
++    return off
++  }
++
++  /** Called only by the original Composer's synchronous submit transaction. */
++  freeze(input: Omit<ComposerSubmissionGesture, 'requestId'>): ComposerSubmissionPreparation {
++    const gesture: ComposerSubmissionGesture = Object.freeze({
++      ...input, requestId: randomUUID() as SessionRequestId,
++    })
++    const participants: { entry: Registration; prepared: PreparedComposerContribution }[] = []
++    const controller = new AbortController()
++    let freezeError: unknown
++    let hasFreezeError = false
++    let settled = false
++    let dispatched = false
++    const finish = (outcome: ComposerSubmissionOutcome) => {
++      if (settled) return
++      settled = true
++      const settlement = outcome === 'cancelled' && dispatched ? 'unknown' : outcome
++      if (settlement !== 'accepted') controller.abort(new Error(`Composer submission ${settlement}`))
++      for (const { entry, prepared } of participants) {
++        entry.active.delete(cancel)
++        try { prepared.finish(settlement) } catch { /* Cleanup cannot change native admission. */ }
++      }
++    }
++    const cancel = () => {
++      controller.abort(new Error('Composer submission contribution was disposed'))
++      finish(dispatched ? 'unknown' : 'cancelled')
++    }
++    for (const entry of this.registrations) {
++      try {
++        const prepared = entry.contribution.freeze(gesture)
++        if (prepared !== undefined) {
++          participants.push({ entry, prepared })
++          entry.active.add(cancel)
++        }
++      } catch (error) {
++        hasFreezeError = true
++        freezeError = error
++        // Keep native slash arbitration working; only an ordinary prompt applies the veto.
++        break
++      }
++    }
++    return {
++      requestId: gesture.requestId,
++      signal: controller.signal,
++      markDispatched: () => { dispatched = true },
++      prepare: async (signal) => {
++        if (hasFreezeError) throw freezeError
++        if (controller.signal.aborted) throw controller.signal.reason
++        if (signal.aborted) throw signal.reason
++        const abort = () => controller.abort(signal.reason)
++        signal.addEventListener('abort', abort, { once: true })
++        let rejectAbort: (reason: unknown) => void = () => {}
++        const cancelled = new Promise<never>((_resolve, reject) => { rejectAbort = reject })
++        const onAbort = () => rejectAbort(controller.signal.reason)
++        controller.signal.addEventListener('abort', onAbort, { once: true })
++        try {
++          await Promise.race([
++            Promise.all(participants.map(({ prepared }) => prepared.prepare(controller.signal))),
++            cancelled,
++          ])
++          if (controller.signal.aborted) throw controller.signal.reason
++        } finally {
++          signal.removeEventListener('abort', abort)
++          controller.signal.removeEventListener('abort', onAbort)
++        }
++      },
++      finish,
++    }
++  }
++}
+diff --git a/packages/client/ui-conversation/src/client/service.ts b/packages/client/ui-conversation/src/client/service.ts
+--- a/packages/client/ui-conversation/src/client/service.ts
++++ b/packages/client/ui-conversation/src/client/service.ts
+@@ -31,6 +31,8 @@
+   DraftAttachmentId, DraftAttachmentSerializationResult, SessionInputResolver, SubmitAttachment, SubmitOutcome,
+ } from './contract/input.ts'
+ import type { InputSubmitMode } from './contract/composer-submission.ts'
++import type { ComposerSubmissions } from './contract/submissions.ts'
++import { ComposerSubmissionRegistry, type ComposerSubmissionPreparation } from './input/submissions.ts'
+ 
+ /**
+  * The outward conversation face (`ctx.conversation`): the scope-addressed
+@@ -38,6 +40,8 @@
+  * test fake must supply.
+  */
+ export interface IConversation {
++  /** Synchronous gesture contributions with native preparation and lifecycle cleanup. */
++  readonly submissions: ComposerSubmissions
+   /** The per-session input machine registry (SessionInputResolver face). */
+   readonly input: SessionInputResolver
+   /**
+@@ -151,6 +155,7 @@
+ 
+ /** Scope-addressed conversation service (root singleton, provided as `conversation`). */
+ export class ConversationController extends Service implements IConversation {
++  readonly submissions = new ComposerSubmissionRegistry()
+   /** The per-session input machine registry (SessionInputResolver face). */
+   readonly input: SessionInputResolver
+   /** The per-session composer-block registry. */
+@@ -232,6 +237,7 @@
+     attachmentIds: readonly DraftAttachmentId[],
+     mode: InputSubmitMode,
+     signal?: AbortSignal,
++    preparation?: ComposerSubmissionPreparation,
+   ): Promise<SubmitOutcome> {
+     const attachments = this.resolveDraftAttachments(attachmentIds)
+     if (attachments.length !== attachmentIds.length) {
+@@ -266,6 +272,7 @@
+       ? undefined
+       : new Promise<PendingSubmissionRetirement>((resolve) => { finishRetirement = resolve })
+     const submission = session.beginSubmission({
++      ...preparation === undefined ? {} : { requestId: preparation.requestId },
+       mode,
+       text,
+       attachments: pendingAttachments,
+@@ -274,16 +281,27 @@
+         finishRetirement?.(settlement)
+       },
+     })
++    const promptSignal = preparation === undefined ? signal
++      : AbortSignal.any([preparation.signal, ...signal === undefined ? [] : [signal]])
+     let content: Parameters<SessionFace['prompt']>[0]
+     try {
++      await preparation?.prepare(promptSignal ?? new AbortController().signal)
+       await nextPaint()
+       const uploaded = await serializeAttachments()
+       content = [...uploaded, ...(text === '' ? [] : [{ type: 'text' as const, text }])]
++      if (promptSignal?.aborted) throw promptSignal.reason
+     } catch (error) {
+       submission.abandon()
+       throw error
+     }
+-    const result = await session.prompt(content, mode, signal, submission.requestId)
++    preparation?.markDispatched()
++    let result: Awaited<ReturnType<SessionFace['prompt']>>
++    try { result = await session.prompt(content, mode, promptSignal, submission.requestId) }
++    catch (error) {
++      submission.abandon()
++      preparation?.finish('unknown')
++      throw error
++    }
+     if (!result.ok) return { kind: 'error' }
+     if (retirement !== undefined && (await retirement).reason !== 'observed') return { kind: 'error' }
+     return { kind: 'success' }
