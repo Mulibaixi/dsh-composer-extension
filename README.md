@@ -71,11 +71,15 @@ After building, install this directory in DSH's plugin manager. The regular buil
 
 ### Update
 
-1. Save work you want to retain in the translation plugin and back up important material.
-2. Install the newer Composer extension and translation plugin distributions in that order through the plugin manager. For source installations, update both repositories, reinstall dependencies, and build the Composer extension followed by the translation plugin first.
-3. Follow the plugin manager's update instructions and restart DSH. For source-directory installations, refresh or reload the extension, or reinstall the same directory if no refresh action is available.
+1. Wait for current tasks to finish and confirm that material is saved. See the translation plugin's [backup and restoration guide (简体中文)](https://github.com/Mulibaixi/dsh-translation-plugin/blob/main/docs/user-guide.zh-CN.md#资料库备份与恢复) for a complete data snapshot.
+2. Enter the **new version's full `.tgz` path or versioned download URL** in the plugin manager, then install and enable it. No prior uninstall is required. Use a new versioned filename or URL; the same installed path may be reported as already installed. Update the translation plugin as well only when the release notes require a companion update.
+3. Follow the plugin manager's refresh, reload, or restart instructions, then open **Composer：联动组件维护**. If ready, keep using the existing patch. If a patch is prepared and awaiting installation, exit DSH normally and completely, then reopen it.
 
-Check compatibility between the extension, translation plugin, and DSH build when updating. Do not treat a restart as automatic recovery while work is running or its outcome is unknown. The extension does not persist recoverable tasks across restarts, and reloading does not automatically repeat model requests.
+**Updating the extension package and updating the host patch are separate operations.** An extension-code update does not reinstall a matching host patch. Whether the plugin can load immediately still depends on DSH's instructions. Replacing a host patch requires a normal full exit; refreshing the window does not apply it.
+
+For source installations, update the original source directory, reinstall dependencies, build, and refresh or reload the extension without uninstalling first. If the manager explicitly requires removal before installation, reinstall and enable it in the same DSH run. The uninstall test's exit-and-restore cycle is not the routine upgrade procedure.
+
+Check compatibility between the extension, translation plugin, and DSH build when updating. The extension does not persist recoverable tasks across restarts, and reloading does not automatically repeat model requests.
 
 See [CHANGELOG](CHANGELOG.md) for version changes.
 
@@ -87,7 +91,7 @@ Choose **Composer：联动组件维护** in the command list, or enter `/compose
 
 Automatic restoration requires a valid installation record and backup owned by the extension. It returns to the state before that installation; manual or early development patches need separate recovery. An upgraded host or invalid backup stops restoration rather than overwriting a later installation.
 
-Backups are under `dsh-composer-extension/host-patches/` in the current user's local application data directory. If DSH cannot open, exit it completely and run the corresponding task's `apply-host-patch.ps1 -JobPath <job.json> -Recover`. Recovery validates the version and hashes and refuses to replace a subsequently upgraded archive. A restored host is patched again only after **重新检测** is selected. The complete Desktop exit and reopen flow still needs real-environment validation.
+Host-patch backups are under `dsh-composer-extension/host-patches/` in the current user's local application data directory, separate from translation-library backups. If DSH cannot open, exit it completely and run the corresponding task's `apply-host-patch.ps1 -JobPath <job.json> -Recover`. Recovery validates the version and hashes and refuses to replace a subsequently upgraded archive. A restored host is patched again only after **重新检测** is selected.
 
 ### Building patch artifacts
 
