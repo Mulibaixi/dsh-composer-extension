@@ -1,9 +1,10 @@
 import type { Context } from '@deepseek-ai/cordis'
-import { spawn, type ChildProcess } from 'node:child_process'
+import { execFile, type ChildProcess } from 'node:child_process'
 import { createHash, randomUUID } from 'node:crypto'
 import { createRequire } from 'node:module'
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
+import { promisify } from 'node:util'
 import type { HostPatchService, HostPatchStatus } from '../shared/host-patch.js'
 import { PACKAGE_NAME } from '../shared/plugin-remote.js'
 import { archiveFileSystem, fileHash, inspectOverlay, prepareOverlay, readArchive, type HostPatchManifest } from './asar-overlay.js'
@@ -52,6 +53,7 @@ interface HostPatchOptions {
 }
 
 const outputRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
+const execFileAsync = promisify(execFile)
 const messageOf = (error: unknown): string => error instanceof Error ? error.message : String(error)
 const emptyStatus = (): HostPatchStatus => ({ state: 'checking', dshVersion: null, message: '正在检查联动组件…', canRestore: false })
 
@@ -63,6 +65,20 @@ async function writeJson(path: string, value: unknown): Promise<void> {
   const temporary = `${path}.${randomUUID()}.tmp`
   try { await writeFile(temporary, JSON.stringify(value) + '\n', { mode: 0o600 }); await rename(temporary, path) }
   finally { await rm(temporary, { force: true }) }
+}
+
+async function launchPatchHelper(jobPath: string, helperPath: string): Promise<number> {
+  const executable = join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe')
+  const literal = (value: string): string => `'${value.replaceAll("'", "''")}'`
+  const argumentsText = `-NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File "${helperPath}" -JobPath "${jobPath}"`
+  // PowerShell 5.1 needs a console: Node's DETACHED_PROCESS can silently skip the script.
+  // Start-Process creates an independent hidden process and returns the real worker PID.
+  const command = `$ErrorActionPreference = 'Stop'; $worker = Start-Process -FilePath ${literal(executable)} -ArgumentList ${literal(argumentsText)} -WindowStyle Hidden -PassThru; $worker.Id`
+  const { stdout } = await execFileAsync(executable, ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', command],
+    { windowsHide: true, timeout: 15000, maxBuffer: 4096 })
+  const pid = Number(stdout.trim())
+  if (!Number.isSafeInteger(pid) || pid < 1 || pid > 2147483647) throw new Error('无法取得安装助手进程编号。')
+  return pid
 }
 
 function within(root: string, path: string): boolean {
@@ -107,7 +123,14 @@ export class ComposerHostPatchService implements HostPatchService {
   }
 
   start(): Promise<void> { return this.check(false) }
-  async status(): Promise<HostPatchStatus> { return { ...this.snapshot } }
+  async status(): Promise<HostPatchStatus> {
+    if (!this.disposed && !this.running && !this.child && this.current?.job.helperPid && !this.current.result &&
+      ['pending', 'restore_pending'].includes(this.snapshot.state)) {
+      try { process.kill(this.current.job.helperPid, 0) }
+      catch (error) { if ((error as NodeJS.ErrnoException).code === 'ESRCH') await this.helperStopped(this.current.job) }
+    }
+    return { ...this.snapshot }
+  }
 
   async recheck(): Promise<HostPatchStatus> {
     if (!this.disposed && !this.running) void this.check(true)
@@ -265,20 +288,18 @@ export class ComposerHostPatchService implements HostPatchService {
     if (!input.automaticRestore) this.current = record
     if (this.disposed && !input.automaticRestore) { await this.cancelRecord(record); return }
     if (input.automaticRestore) await writeJson(job.permitPath, { id: job.id, allowed: true })
-    const launch = this.options.launchHelper ?? ((jobPath: string, helperPath: string) => spawn(
-      join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe'),
-      ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden', '-File', helperPath, '-JobPath', jobPath],
-      { detached: true, windowsHide: true, stdio: 'ignore' },
-    ))
-    const child = launch(path, helper)
+    const child = this.options.launchHelper?.(path, helper)
     this.child = child
-    child.once('error', error => { if (!this.disposed) this.failed(error); void writeJson(job.permitPath, { id: job.id, allowed: false }).catch(() => {}) })
-    child.once('exit', () => {
-      if (this.disposed || this.current?.job.id !== id) return
-      void this.helperStopped(job).catch(error => this.failed(error))
-    })
-    child.unref()
-    if (child.pid) await writeJson(path, { ...job, helperPid: child.pid })
+    if (child) {
+      child.once('error', error => { if (!this.disposed) this.failed(error); void writeJson(job.permitPath, { id: job.id, allowed: false }).catch(() => {}) })
+      child.once('exit', (code, signal) => {
+        if (this.disposed || this.current?.job.id !== id) return
+        void this.helperStopped(job, code, signal).catch(error => this.failed(error))
+      })
+      child.unref()
+    }
+    const helperPid = child ? child.pid : await launchPatchHelper(path, helper)
+    if (helperPid) { record.job = { ...job, helperPid }; await writeJson(path, record.job) }
     this.snapshot = { state: job.operation === 'restore' ? 'restore_pending' : 'pending', dshVersion: input.version,
       message: job.operation === 'restore' ? '恢复已准备，完全退出 DSH 后自动完成。' : '联动组件已准备，完全退出 DSH 后自动安装，重新打开生效。', canRestore: false }
   }
@@ -314,13 +335,13 @@ export class ComposerHostPatchService implements HostPatchService {
 
   private async removeCandidate(job: PatchJob): Promise<void> { await rm(job.candidatePath, { force: true }) }
 
-  private async helperStopped(job: PatchJob): Promise<void> {
+  private async helperStopped(job: PatchJob, code?: number | null, signal?: NodeJS.Signals | null): Promise<void> {
     let result: PatchResult | null = null
     try { result = await json(job.resultPath) as PatchResult }
     catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error }
     if (this.current?.job.id !== job.id || this.disposed) return
     if (result?.id === job.id && (result.state === 'failed' || result.state === 'cancelled')) this.failed(result.message)
-    else this.failed('安装助手已退出，请重新检测以安排安装。')
+    else this.failed(`安装助手已退出${signal ? `（信号 ${signal}）` : code !== undefined ? `（退出码 ${String(code)}）` : ''}，未写入结果；请重新检测以安排安装。`)
   }
 
   private async cleanOlderJobs(keep: string): Promise<void> {
