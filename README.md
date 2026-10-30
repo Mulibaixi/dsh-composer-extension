@@ -2,17 +2,21 @@
 
 [English](README.md) | [简体中文](README.zh-CN.md)
 
-Linked material submission and task coordination for the main chat input in DeepSeek Harness (DSH), helping the main model and translation plugin work on the same request.
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-Prepare source material in the translation workspace, describe requirements in the main chat, and send both together. When supported translation tasks need more background or attention to a critical issue, the extension routes the request back to the appropriate main chat, reducing manual copying and message passing.
+Provides linked material submission and task coordination for the main chat input in DeepSeek Harness (DSH), with the goal of gradually supporting collaboration between the main conversation and different plugins.
+
+The extension currently works with the translation workspace in `dsh-translation-plugin`. Prepare source material in the workspace, describe requirements in the main chat, and send both together. When translation, refinement, or review needs more background or attention to a critical issue, the extension routes the request back to the appropriate main chat, reducing manual copying and message passing.
+
+[What problem does it solve?](#what-problem-does-it-solve) · [Installation](#installation-and-updates) · [User guide](#user-guide) · [Development direction](#development-direction) · [Projects and documentation](#projects-and-documentation)
 
 ## What problem does it solve?
 
-- **Source material and instructions get separated**: submit prepared translation material with the main-chat message.
-- **Translation may need more background**: let the translation model ask the main model for context in supported tasks.
+- **Material and instructions get separated**: submit prepared translation material from the workspace with the main-chat message.
+- **Tasks may need more background**: let the translation model ask the main model for context in supported tasks.
 - **Background work gets disconnected from the chat**: notify the owning main model at integrated task stages, reducing manual progress checking and result handoffs.
 
-This is a companion extension, not a standalone translator. The translation plugin manages execution, session history, translation versions, and memory assets. This extension does not provide another translation workspace.
+The translation plugin manages execution, session history, translation versions, and memory assets; the Composer extension handles material handoffs and task coordination.
 
 ## What it can do today
 
@@ -23,14 +27,20 @@ This is a companion extension, not a standalone translator. The translation plug
 | Key-stage notices | Deliver messages requiring main-model attention for integrated analysis or document tasks. |
 | Stop and stale-task handling | Avoid waking a user-stopped main model for late requests, and prevent stale notices from being treated as current tasks. |
 
-Available features depend on the DSH build, translation plugin, and selected models. Installing the extension does not mean that it schedules every background task, nor does it guarantee translation speed or quality.
+Task coordination currently covers integrated analysis and document stages; context exchanges require tool-call support in the translation model. Platform and DSH-version requirements for the linked-submission patch are described below.
 
-The project is still in development. Complete desktop workflows and different model combinations need confirmation in the actual environment.
+## Development direction
+
+The future goal is to develop material submission, exchanges between the main conversation and plugin tasks, and stage notifications into collaboration capabilities that different plugins can adopt.
+
+Near-term work prioritizes keeping the existing translation, refinement, and review features working reliably while gradually reducing coupling between this extension and the translation plugin. Clearer boundaries between collaboration handoffs and business logic should reduce the effect of business changes on the extension.
+
+General-purpose collaboration is a future goal. The current interfaces are still built around translation, and a verified general-purpose integration for multiple plugins is not available yet.
 
 ## Requirements
 
 - A companion DSH `0.2.0-rc.2`, `0.2.1-rc.2`, or `0.2.1-rc.3` build supporting the extension.
-- A companion build of `dsh-translation-plugin` providing the workspace and translation tasks. The companion builds use content protocol 3 and task-phase protocol 2.
+- The current translation workflow requires a companion build of `dsh-translation-plugin` providing the workspace and translation tasks. The companion builds use content protocol 3 and task-phase protocol 2.
 - Configured models in DSH. Context requests from the translation model also require tool-call support in that model.
 - Node.js 22 or later and pnpm to build from source.
 
@@ -93,6 +103,19 @@ After you stop the main model, late notices do not substitute for a new user ins
 - **No context request appears**: the current model or task may not support it; this alone does not indicate translation failure.
 - **No stage notice appears**: not all background workflows use this extension. Inspect progress and errors in the translation plugin instead of resubmitting solely because the main chat is quiet.
 - **Work does not continue after restart**: the extension does not automatically restore temporary exchanges. Check the original task in the translation plugin before explicitly choosing the next action.
+
+## Projects and documentation
+
+The GitHub links below use the planned publication URLs.
+
+| Entry | Link |
+| --- | --- |
+| Composer extension | [Mulibaixi/dsh-composer-extension](https://github.com/Mulibaixi/dsh-composer-extension) |
+| Translation plugin | [Mulibaixi/dsh-translation-plugin](https://github.com/Mulibaixi/dsh-translation-plugin) |
+| Installation and updates | [Installation and updates](#installation-and-updates) |
+| Operations | [User guide](#user-guide) |
+| Changes | [CHANGELOG](CHANGELOG.md) |
+| Contributions | [CONTRIBUTING](CONTRIBUTING.md) |
 
 ## Contributing and license
 
