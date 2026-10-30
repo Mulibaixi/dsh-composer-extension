@@ -53,7 +53,7 @@ Other environments and older versions still use the [0.2.0-rc.2 patch](patches/r
 ### Install
 
 1. Obtain a `dsh-composer-extension-<version>.tgz` distribution containing the host patch artifacts. Enter its full local path or download URL in DSH's plugin manager, then install and enable it. Distribution packages include the build output and need no local build.
-2. Install and enable a matching translation plugin, then fully restart as requested by the plugin manager to load the plugins. Open **Composer：联动组件维护**. If the component is prepared and awaiting installation, exit DSH completely and reopen it again.
+2. Install and enable a matching translation plugin. If the workspace and maintenance command are available, check them directly; fully restart if the plugin manager requests it. Open **Composer：联动组件维护**. If the component is prepared and awaiting installation, exit DSH completely and reopen it to apply the patch.
 3. Open the translation workspace and confirm that Normal mode does not report missing material-submission support.
 
 ### Build from source
@@ -79,7 +79,11 @@ See [CHANGELOG](CHANGELOG.md) for version changes.
 
 ### Linked component maintenance
 
-Choose **Composer：联动组件维护** in the command list, or enter `/composer-maintenance`, to inspect status, check again, or arrange restoration of the previous host. A window closed to the tray keeps the helper waiting. Disabling, uninstalling, or reloading cancels the pending task; a crash or forced exit does not authorize installation. An official update that changes the archive cancels the old task, and detection runs on the next load.
+Choose **Composer：联动组件维护** in the command list, or enter `/composer-maintenance`, to inspect status, check again, or arrange restoration of the previous host. A window closed to the tray keeps the helper waiting. Disabling, uninstalling, or reloading cancels a pending installation; a crash or forced exit does not authorize patch installation. An official update that changes the archive cancels the old task, and detection runs on the next load.
+
+**Disabling or uninstalling this extension through DSH's plugin manager automatically schedules restoration of a patch installed by this extension. Restoration completes after DSH exits completely.** The helper and recovery files stay outside the extension directory and remain usable after the package is removed. A normal reload retains the installed patch; enabling the extension again before exit cancels a detected pending automatic restoration. To resume Normal translation, install or enable the extension again and follow its linked-component maintenance status.
+
+Automatic restoration requires a valid installation record and backup owned by the extension. It returns to the state before that installation; manual or early development patches need separate recovery. An upgraded host or invalid backup stops restoration rather than overwriting a later installation.
 
 Backups are under `dsh-composer-extension/host-patches/` in the current user's local application data directory. If DSH cannot open, exit it completely and run the corresponding task's `apply-host-patch.ps1 -JobPath <job.json> -Recover`. Recovery validates the version and hashes and refuses to replace a subsequently upgraded archive. A restored host is patched again only after **重新检测** is selected. The complete Desktop exit and reopen flow still needs real-environment validation.
 

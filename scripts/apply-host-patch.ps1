@@ -193,7 +193,7 @@ function Invoke-Job {
     return $outcome
   }
 
-  while (Original-ProcessesRunning) {
+  while ((Original-ProcessesRunning) -or ($job.operation -eq 'restore' -and @(Matching-DshProcesses).Count -ne 0)) {
     # An explicit cancellation may release a superseded worker while Host is still running.
     $permit = Read-Permit
     if ($null -ne $permit -and -not $permit.allowed) {
