@@ -6,14 +6,14 @@
 
 Provides linked material submission and task coordination for the main chat input in DeepSeek Harness (DSH), with the goal of gradually supporting collaboration between the main conversation and different plugins.
 
-The extension currently works with the translation workspace in `dsh-translation-plugin`. Prepare source material in the workspace, describe requirements in the main chat, and send both together. When translation, refinement, or review needs more background or attention to a critical issue, the extension routes the request back to the appropriate main chat, reducing manual copying and message passing.
+The extension currently works with the translation workspace in `dsh-translation-plugin`. Prepare source material in the workspace, describe requirements in the main chat, and send both together. The main model can provide the translation model with consolidated background information and translation requirements for translation, refinement, and review.
 
 [What problem does it solve?](#what-problem-does-it-solve) · [Installation](#installation-and-updates) · [User guide](#user-guide) · [Development direction](#development-direction) · [Projects and documentation](#projects-and-documentation)
 
 ## What problem does it solve?
 
 - **Material and instructions get separated**: submit prepared translation material from the workspace with the main-chat message.
-- **Tasks may need more background**: let the translation model ask the main model for context in supported tasks.
+- **Tasks may need information**: provide an interface for the main model to consolidate information and submit it to the translation model.
 - **Background work gets disconnected from the chat**: notify the owning main model at integrated task stages, reducing manual progress checking and result handoffs.
 
 The translation plugin manages execution, session history, translation versions, and memory assets; the Composer extension handles material handoffs and task coordination.
@@ -23,11 +23,11 @@ The translation plugin manages execution, session history, translation versions,
 | Capability | Current role |
 | --- | --- |
 | Linked submission | Connect the main chat input with the translation workspace to submit instructions and prepared material together. |
-| Context requests | Route translation questions to the owning main model when supported by the translation plugin and selected model. |
+| Supplementary information | Lets the main model deliver consolidated background information and translation requirements to the translation model. |
 | Key-stage notices | Deliver messages requiring main-model attention for integrated analysis or document tasks. |
-| Stop and stale-task handling | Avoid waking a user-stopped main model for late requests, and prevent stale notices from being treated as current tasks. |
+| Stop and stale-task handling | Avoid waking a user-stopped main model for late task messages, and prevent stale notices from being treated as current tasks. |
 
-Task coordination currently covers integrated analysis and document stages; context exchanges require tool-call support in the translation model. Platform and DSH-version requirements for the linked-submission patch are described below.
+Current translation-model interactions start from specific user actions. The translation model cannot yet proactively ask the main model for additional information. Task coordination covers integrated analysis and document stages; platform and DSH-version requirements for the linked-submission patch are described below.
 
 ## Development direction
 
@@ -41,7 +41,7 @@ General-purpose collaboration is a future goal. The current interfaces are still
 
 - DSH `>=0.2.0-rc.2` with the plugin and main-session interfaces required by this extension. Compatibility follows interface capabilities rather than an enumerated list of DSH versions.
 - The current translation workflow requires a companion build of `dsh-translation-plugin` providing the workspace and translation tasks. The companion builds use content protocol 3 and task-phase protocol 2.
-- Configured models in DSH. Context requests from the translation model also require tool-call support in that model.
+- Configured models in DSH.
 - Node.js 22 or later and pnpm to build from source.
 
 Linked submission requires submissions protocol 1. An existing host interface is used directly without replacing files. Otherwise, **Windows Desktop matches bundled patches by target-module fingerprints, installs after a normal full exit, and uses them when DSH is reopened.** If an update leaves the relevant modules unchanged, the patch can be reused without updating the extension merely for a new version number. An identical installed patch is skipped. Users need no separate Node installation or installer script.
@@ -113,24 +113,24 @@ The material accompanies that message, and the main model arranges processing ac
 
 Submission retains the source as sent. Editing the next draft does not rewrite it. Use the translation plugin to inspect results, correct source material, or retranslate.
 
-### 2. Handle questions during translation
+### 2. Supplementary information
 
-In tasks supporting context requests, the translation model can ask for missing background or context. The main model may provide a supplement, defer to the user, or stop the operation.
+Describe the current goal or specify information in the main chat. The main model consolidates the relevant background and translation requirements, then delivers them to the translation model for the current translation or refinement.
 
-Automatic exchanges are limited, rather than an unlimited discussion loop. If processing cannot continue, provide the necessary information in the main chat and check the task state shown by the translation plugin. Not every file task or model combination supports context requests.
+Current interactions start from specific user actions. The translation model does not yet initiate interactions on its own or proactively ask the main model for additional information.
 
 ### 3. When background work needs attention
 
 Integrated tasks notify the owning main model about critical questions, changed material, or results needing review. They do not send a notice for every completed chunk. The main model continues from the actual task without requiring a repeated user instruction at each step.
 
-After switching main chats, context requests and notices for existing tasks still go to the chat that started the task.
+After switching main chats, notices for existing tasks still go to the chat that started the task.
 
 After you stop the main model, late notices do not substitute for a new user instruction. Check the original task before retrying an unknown outcome. Background results and history remain available in the translation plugin.
 
 ### 4. When a feature is unavailable
 
 - **Linked submission is unavailable**: check the companion DSH build, confirm both plugins are enabled, and restart DSH.
-- **No context request appears**: the current model or task may not support it; this alone does not indicate translation failure.
+- **Proactive requests for additional information**: proactive interaction is not supported yet. Specified information can be delivered to the translation model through the main model.
 - **No stage notice appears**: not all background workflows use this extension. Inspect progress and errors in the translation plugin instead of resubmitting solely because the main chat is quiet.
 - **Work does not continue after restart**: the extension does not automatically restore temporary exchanges. Check the original task in the translation plugin before explicitly choosing the next action.
 
