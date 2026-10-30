@@ -44,32 +44,56 @@ General-purpose collaboration is a future goal. The current interfaces are still
 - Configured models in DSH. Context requests from the translation model also require tool-call support in that model.
 - Node.js 22 or later and pnpm to build from source.
 
-**Official, unmodified DSH does not provide linked material submission in the supported versions. Installing this extension alone does not add it; a matching host patch is required.** Use the [0.2.0-rc.2 patch](patches/rc2-composer-submissions-v1.patch) with its [source manifest](patches/source-manifest.json), the [0.2.1-rc.2 patch](patches/dsh-0.2.1-rc.2-composer-submissions-v1.patch) with its [source manifest](patches/source-manifest-0.2.1-rc.2.json), or the [0.2.1-rc.3 patch](patches/dsh-0.2.1-rc.3-composer-submissions-v1.patch) with its [source manifest](patches/source-manifest-0.2.1-rc.3.json). Rebuild and apply the matching patch after a DSH upgrade. The extension does not modify or upgrade the desktop application automatically.
+Official DSH needs a matching host patch for linked submission. **Extension builds containing the patch artifacts can detect and prepare the patch on Windows Desktop DSH `0.2.1-rc.3`, install it after a normal full exit, and use it when DSH is reopened.** An identical patch is skipped. Users need no separate Node installation or installer script.
+
+Other environments and older versions still use the [0.2.0-rc.2 patch](patches/rc2-composer-submissions-v1.patch) and [manifest](patches/source-manifest.json), or the [0.2.1-rc.2 patch](patches/dsh-0.2.1-rc.2-composer-submissions-v1.patch) and [manifest](patches/source-manifest-0.2.1-rc.2.json). The rc.3 [source patch](patches/dsh-0.2.1-rc.3-composer-submissions-v1.patch) and [manifest](patches/source-manifest-0.2.1-rc.3.json) remain available for builds. A new DSH version still requires an adapted extension.
 
 ## Installation and updates
 
 ### Install
 
-1. Prepare the companion DSH environment and extension source. In this repository, run:
+1. Obtain a `dsh-composer-extension-<version>.tgz` distribution containing the host patch artifacts. Enter its full local path or download URL in DSH's plugin manager, then install and enable it. Distribution packages include the build output and need no local build.
+2. Install and enable a matching translation plugin, then fully restart as requested by the plugin manager to load the plugins. Open **Composer：联动组件维护**. If the component is prepared and awaiting installation, exit DSH completely and reopen it again.
+3. Open the translation workspace and confirm that Normal mode does not report missing material-submission support.
+
+### Build from source
+
+Prepare the companion DSH environment and extension source. In this repository, run:
 
    ```powershell
    pnpm install --frozen-lockfile
    pnpm build
    ```
 
-2. In DSH's plugin manager, install this directory as a local plugin named `dsh-composer-extension` and enable it.
-3. Install and enable a matching translation plugin, then restart DSH.
-4. Open the translation workspace and confirm that Normal mode does not report missing material-submission support.
+After building, install this directory in DSH's plugin manager. The regular build does not generate host patch modules; automatic linked-component setup and complete distribution packaging also require [building patch artifacts](#building-patch-artifacts) below.
 
 ### Update
 
 1. Save work you want to retain in the translation plugin and back up important material.
-2. Update both source directories and reinstall dependencies. Build the Composer extension first, then the translation plugin.
-3. Refresh or reload the extension in the plugin manager and restart DSH. If there is no refresh action, uninstall and reinstall the same directory.
+2. Install the newer Composer extension and translation plugin distributions in that order through the plugin manager. For source installations, update both repositories, reinstall dependencies, and build the Composer extension followed by the translation plugin first.
+3. Follow the plugin manager's update instructions and restart DSH. For source-directory installations, refresh or reload the extension, or reinstall the same directory if no refresh action is available.
 
 Check compatibility between the extension, translation plugin, and DSH build when updating. Do not treat a restart as automatic recovery while work is running or its outcome is unknown. The extension does not persist recoverable tasks across restarts, and reloading does not automatically repeat model requests.
 
 See [CHANGELOG](CHANGELOG.md) for version changes.
+
+### Linked component maintenance
+
+Choose **Composer：联动组件维护** in the command list, or enter `/composer-maintenance`, to inspect status, check again, or arrange restoration of the previous host. A window closed to the tray keeps the helper waiting. Disabling, uninstalling, or reloading cancels the pending task; a crash or forced exit does not authorize installation. An official update that changes the archive cancels the old task, and detection runs on the next load.
+
+Backups are under `dsh-composer-extension/host-patches/` in the current user's local application data directory. If DSH cannot open, exit it completely and run the corresponding task's `apply-host-patch.ps1 -JobPath <job.json> -Recover`. Recovery validates the version and hashes and refuses to replace a subsequently upgraded archive. A restored host is patched again only after **重新检测** is selected. The complete Desktop exit and reopen flow still needs real-environment validation.
+
+### Building patch artifacts
+
+The regular build generates Host, Client, and the exit helper. Maintainers generate the patch modules for distribution; users do not compile the host at runtime. Prepare the fixed DSH source with its build dependencies and the matching official `app.asar`, then run:
+
+```powershell
+node scripts/build-host-patches.mjs --source <DSH-source> --archive <official-app.asar>
+pnpm build
+pnpm pack
+```
+
+The tool validates and applies the fixed source patch in the provided source tree, then builds into `dist/host-patches/<version>/`: two linked-submission modules and the plugin manager with corrected restart copy. It needs Node.js 22.19 or later; `--from-build` reuses existing artifacts after source validation. Packaging checks rc.3 artifacts and helper integrity. Generated files do not enter the source repository.
 
 ## User guide
 
@@ -112,7 +136,7 @@ The GitHub links below use the planned publication URLs.
 | --- | --- |
 | Composer extension | [Mulibaixi/dsh-composer-extension](https://github.com/Mulibaixi/dsh-composer-extension) |
 | Translation plugin | [Mulibaixi/dsh-translation-plugin](https://github.com/Mulibaixi/dsh-translation-plugin) |
-| Installation and updates | [Installation and updates](#installation-and-updates) |
+| Installation and component maintenance | [Installation and updates](#installation-and-updates) |
 | Operations | [User guide](#user-guide) |
 | Changes | [CHANGELOG](CHANGELOG.md) |
 | Contributions | [CONTRIBUTING](CONTRIBUTING.md) |

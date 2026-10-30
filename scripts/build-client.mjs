@@ -8,6 +8,7 @@ const sourceRoot = await realpath(resolve(project, 'src'))
 const entry = resolve(sourceRoot, 'client/index.ts')
 const pkg = JSON.parse(await readFile(resolve(project, 'package.json'), 'utf8'))
 const modules = new Map()
+const platformExternals = new Set(['react', '@deepseek-ai/dsh-client-ui-primitives'])
 
 function idOf(path) {
   const id = relative(sourceRoot, path)
@@ -48,6 +49,7 @@ async function collect(path) {
   const compiled = { body: result.outputText.trimEnd(), dependencies: {} }
   modules.set(id, compiled)
   for (const specifier of dependencies(compiled.body, id)) {
+    if (platformExternals.has(specifier)) continue
     if (!specifier.startsWith('./') && !specifier.startsWith('../')) throw new Error(`Client external is not supported: ${specifier}`)
     let target = resolve(dirname(actual), specifier)
     const extension = extname(target)
@@ -75,6 +77,7 @@ const output = [
   '      const module = { exports: {} };',
   '      cache[id] = module;',
   '      const localRequire = name => {',
+  ...[...platformExternals].map(specifier => `        if (name === ${JSON.stringify(specifier)}) return require(${JSON.stringify(specifier)});`),
   '        const target = dependencyMap[id]?.[name];',
   '        if (!target) throw new Error("Unknown Client dependency: " + name);',
   '        return load(target);',

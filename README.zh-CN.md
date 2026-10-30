@@ -44,32 +44,56 @@
 - 在 DSH 中配置可用模型；翻译模型主动请求补充信息还需要该模型支持工具调用。
 - 从源码构建需要 Node.js 22 或更高版本及 pnpm。
 
-**受支持版本的官方原版 DSH 均不提供所需的联动发送能力。只安装本扩展不能补齐这一能力，还需要匹配的宿主补丁。** 根据宿主版本使用 [0.2.0-rc.2 补丁](patches/rc2-composer-submissions-v1.patch)及其[源码清单](patches/source-manifest.json)、[0.2.1-rc.2 补丁](patches/dsh-0.2.1-rc.2-composer-submissions-v1.patch)及其[源码清单](patches/source-manifest-0.2.1-rc.2.json)，或 [0.2.1-rc.3 补丁](patches/dsh-0.2.1-rc.3-composer-submissions-v1.patch)及其[源码清单](patches/source-manifest-0.2.1-rc.3.json)。升级 DSH 后需重新构建并应用对应补丁；扩展不会自动修改或升级桌面客户端。
+受支持版本的官方原版 DSH 需要匹配的宿主补丁才能联动发送。**包含补丁产物的扩展构建可在 Windows 桌面版 DSH `0.2.1-rc.3` 中自动检测和准备补丁，正常完全退出后自动安装，重新打开生效。** 已安装相同补丁时跳过，用户无需另装 Node 或运行独立脚本。
+
+其他环境和旧版仍使用 [0.2.0-rc.2 补丁](patches/rc2-composer-submissions-v1.patch)及其[源码清单](patches/source-manifest.json)，或 [0.2.1-rc.2 补丁](patches/dsh-0.2.1-rc.2-composer-submissions-v1.patch)及其[源码清单](patches/source-manifest-0.2.1-rc.2.json)。rc.3 的[源码补丁](patches/dsh-0.2.1-rc.3-composer-submissions-v1.patch)及[清单](patches/source-manifest-0.2.1-rc.3.json)保留用于构建。新 DSH 版本仍需先更新至已适配的扩展。
 
 ## 安装与更新
 
 ### 安装
 
-1. 准备配套 DSH 环境及扩展源码，在本项目目录执行：
+1. 取得包含宿主补丁产物的 `dsh-composer-extension-<版本>.tgz` 分发包，在 DSH 插件管理器的安装输入框中填写安装包的完整路径或下载链接，安装并启用。分发包包含构建产物，使用者无需本地构建。
+2. 安装并启用匹配的翻译插件，按插件管理器提示完整重启以载入插件。打开“Composer：联动组件维护”；若提示联动组件已准备、等待安装，再正常完全退出 DSH 并重新打开。
+3. 打开翻译工作区，确认普通模式未提示材料提交能力缺失。
+
+### 从源码构建
+
+准备配套 DSH 环境及扩展源码，在本项目目录执行：
 
    ```powershell
    pnpm install --frozen-lockfile
    pnpm build
    ```
 
-2. 在 DSH 插件管理器中，将本目录作为 `dsh-composer-extension` 本地插件安装并启用。
-3. 安装并启用匹配的翻译插件，然后重启 DSH。
-4. 打开翻译工作区，确认普通模式未提示材料提交能力缺失。
+构建完成后，可在 DSH 插件管理器中安装本目录。普通构建不生成宿主补丁模块；自动准备联动组件及生成完整分发包还需完成下文的[补丁产物构建](#构建补丁产物)。
 
 ### 更新
 
 1. 在翻译插件中保存需要保留的内容，并备份重要资料。
-2. 同时更新两个源码目录，重新安装依赖并构建；先构建 Composer 扩展，再构建翻译插件。
-3. 在插件管理器中刷新或重新加载扩展，再重启 DSH；没有刷新入口时可卸载后重新安装同一目录。
+2. 在插件管理器中依次安装新版 Composer 扩展和翻译插件分发包。源码安装则先更新两个源码目录、重新安装依赖，依次构建 Composer 扩展和翻译插件。
+3. 按插件管理器提示完成更新并重启 DSH；源码目录安装可刷新或重新加载扩展，没有刷新入口时可重新安装同一目录。
 
 更新时核对扩展、翻译插件与 DSH 构建是否匹配。不要在运行中任务尚未结束或结果不明时，将重启视为自动恢复手段。扩展本身不保存可跨重启恢复的任务，重新加载也不会自动重发模型请求。
 
 版本变化见 [CHANGELOG](CHANGELOG.md)。
+
+### 联动组件维护
+
+从命令列表选择 **Composer：联动组件维护**，或输入 `/composer-maintenance`，查看状态、重新检测或安排恢复补丁前版本。关闭窗口但仍在托盘运行时，安装助手会继续等待。停用、卸载或重载会撤销本次待安装任务；崩溃或强杀不会授予安装许可。官方更新改变原包时取消旧任务，下次加载重新检测。
+
+备份位于当前用户本地应用数据目录的 `dsh-composer-extension/host-patches/` 下。DSH 无法打开时，完全退出后可运行对应任务目录中的 `apply-host-patch.ps1 -JobPath <job.json> -Recover`。恢复会核验版本与哈希，拒绝覆盖后来升级的安装包。恢复后须主动“重新检测”才重新安排安装。完整桌面退出和重开流程仍需实际环境验收。
+
+### 构建补丁产物
+
+一般构建生成 Host、Client 和退出安装助手。补丁模块由维护者生成后随扩展分发，用户机器不临时编译。准备固定 DSH 源码及其构建依赖、匹配的官方原版 `app.asar` 后执行：
+
+```powershell
+node scripts/build-host-patches.mjs --source <DSH源码目录> --archive <原版app.asar>
+pnpm build
+pnpm pack
+```
+
+工具核验固定源码补丁，在提供的源码目录应用补丁并构建，输出到 `dist/host-patches/<版本>/`；包括两个联动客户端模块及修正重启提示的插件管理模块。需要 Node.js 22.19 或更高版本。`--from-build` 可复用已校验源码的现有产物。打包会检查 rc.3 产物和助手完整性，生成文件不提交源码仓库。
 
 ## 使用说明
 
@@ -112,7 +136,7 @@ GitHub 仓库链接按计划发布地址预留。
 | --- | --- |
 | Composer 扩展 | [Mulibaixi/dsh-composer-extension](https://github.com/Mulibaixi/dsh-composer-extension) |
 | 翻译插件 | [Mulibaixi/dsh-translation-plugin](https://github.com/Mulibaixi/dsh-translation-plugin) |
-| 安装与更新 | [安装与更新](#安装与更新) |
+| 安装与组件维护 | [安装与更新](#安装与更新) |
 | 操作说明 | [使用说明](#使用说明) |
 | 更新记录 | [CHANGELOG](CHANGELOG.md) |
 | 贡献指南 | [CONTRIBUTING](CONTRIBUTING.md) |

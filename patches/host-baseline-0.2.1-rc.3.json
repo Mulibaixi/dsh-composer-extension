@@ -1,0 +1,28 @@
+{
+  "dshVersion": "0.2.1-rc.3",
+  "composerProtocol": 1,
+  "files": [
+    {
+      "archivePath": "dsh/node_modules/@deepseek-ai/dsh-api-session-controller/lib/client.js",
+      "file": "dsh-api-session-controller.client.js",
+      "upstreamSha256": "82f2301c18f0e51340c1eedf8ecdfb939e873b3770a80632e438b86e82887d0e",
+      "knownPatchSha256": [
+        "727ad1b2ec971360215d6af3fcc385423b4b8970174aa95bc34050c8579392fa"
+      ]
+    },
+    {
+      "archivePath": "dsh/node_modules/@deepseek-ai/dsh-client-ui-conversation/lib/client.js",
+      "file": "dsh-client-ui-conversation.client.js",
+      "upstreamSha256": "c151e7acb17eab9018939eff3b093a4cc4983e0c3cea5eba7ac858dbf8a3eb84",
+      "knownPatchSha256": [
+        "95cf4f3070d559e77da9134e75f0b2364730d75305bb6da5b872531da1231275"
+      ]
+    },
+    {
+      "archivePath": "dsh/node_modules/@deepseek-ai/dsh-client-ui-plugin-manager/lib/client.js",
+      "file": "dsh-client-ui-plugin-manager.client.js",
+      "upstreamSha256": "4b6caa02c9336e3a118e56635164697d4793c29eb259f4a3eddde39ad1bcaa78",
+      "knownPatchSha256": []
+    }
+  ]
+}

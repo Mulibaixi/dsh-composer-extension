@@ -461,3 +461,24 @@ diff --git a/packages/client/ui-conversation/src/client/service.ts b/packages/cl
      if (!result.ok) return { kind: 'error' }
      if (retirement !== undefined && (await retirement).reason !== 'observed') return { kind: 'error' }
      return { kind: 'success' }
+diff --git a/packages/client/ui-plugin-manager/src/client/locales.ts b/packages/client/ui-plugin-manager/src/client/locales.ts
+--- a/packages/client/ui-plugin-manager/src/client/locales.ts
++++ b/packages/client/ui-plugin-manager/src/client/locales.ts
+@@ -25,7 +25,7 @@
+   installExistingDescription: '支持 npm 包、Git 仓库和本地目录',
+   restartNotice: '请重启 DSH 使更改生效。{reason}',
+   restartReasonNoHmr: '这个 profile 只在启动时应用更改。',
+-  restartReasonPackageMoved: '已安装的插件包解析到了另一个目录，或者更改替换了 DSH 安装自带的包。从其他位置安装前请先卸载。',
++  restartReasonPackageMoved: '插件加载信息已更新，需完全退出并重新打开 DSH 后生效。',
+   restartReasonHostModule: '更改涉及 DSH 自身已加载的模块。',
+   restartReasonUnmanagedPlugin: '更改涉及一个不受插件列表管理的插件。',
+   restartReasonModuleComparison: 'DSH 无法将已加载的插件与磁盘上的文件进行比较。',
+@@ -253,7 +253,7 @@
+   installExistingDescription: 'Supports npm packages, Git repositories, and local directories',
+   restartNotice: 'Restart DSH to apply the change. {reason}',
+   restartReasonNoHmr: 'This profile applies changes only at startup.',
+-  restartReasonPackageMoved: 'An installed package now resolves to another directory, or the change replaces a package the DSH installation provides. Uninstall a package before installing it from another location.',
++  restartReasonPackageMoved: 'Plugin loading information has changed. Quit DSH completely and reopen it to apply the change.',
+   restartReasonHostModule: 'The change reaches modules DSH itself loaded.',
+   restartReasonUnmanagedPlugin: 'The change reaches a plugin running outside the plugin list.',
+   restartReasonModuleComparison: 'DSH could not compare the loaded plugins with their files.',

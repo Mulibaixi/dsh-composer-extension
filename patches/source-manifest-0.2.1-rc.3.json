@@ -4,7 +4,7 @@
   "composerProtocol": 1,
   "patch": {
     "file": "dsh-0.2.1-rc.3-composer-submissions-v1.patch",
-    "sha256": "cac7b96a849e132b693e8f607713836b4a4c2018d607e4db1d87945437f2c682"
+    "sha256": "4bf7378ad63d280cb88f159bebfffd83c50fe941bf358a5d46d0205ed476d137"
   },
   "files": [
     {
@@ -46,6 +46,11 @@
       "path": "packages/client/ui-conversation/src/client/service.ts",
       "upstreamSha256": "a2044e1c827bf2fc5f5f437fd93a17c610cd913e1da30d1c311c06c3ccdbef45",
       "patchedSha256": "87aaa8f4c5cd6934ac3e02798d70fa380e45eb462499e32103ce2640410ffcf5"
+    },
+    {
+      "path": "packages/client/ui-plugin-manager/src/client/locales.ts",
+      "upstreamSha256": "739949355102f5c9dad9cb728ea0b08ec7f11a4cf054cc4552480a6c448f2a5a",
+      "patchedSha256": "95015dd019133dadac5f79084de8195d976595a131b2b3f54b0ceb5a4b221b10"
     }
   ]
 }

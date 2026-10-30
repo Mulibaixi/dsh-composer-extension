@@ -4,7 +4,8 @@ import type {} from '@deepseek-ai/dsh-agent'
 import type {} from '@deepseek-ai/dsh-api-session-controller'
 import type { TypertContribution } from '@deepseek-ai/dsh-typert-registry/types'
 import type {} from '@deepseek-ai/dsh-typert-registry'
-import { PLUGIN_REMOTE, PACKAGE_NAME } from '../shared/plugin-remote.js'
+import { PLUGIN_REMOTE, HOST_PATCH_REMOTE, PACKAGE_NAME } from '../shared/plugin-remote.js'
+import { createHostPatchService } from './host-patch.js'
 import {
   type DomainResult,
   type ExchangeCapabilities,
@@ -512,17 +513,25 @@ export class TranslationExchangeHostService implements TranslationExchangeServic
   }
 }
 
-export function apply(ctx: Context): void {
+export async function apply(ctx: Context): Promise<void> {
+  let disposed = false
+  ctx.effect(() => () => { disposed = true }, `${PACKAGE_NAME}.lifetime`)
   const exchange = new TranslationExchangeHostService(ctx)
   ctx.provide('translationExchange', exchange)
+  ctx.effect(() => () => exchange.dispose(), `${PACKAGE_NAME}.exchange`)
+  const hostPatch = await createHostPatchService(ctx)
+  if (disposed) { await hostPatch.dispose(); return }
+  ctx.provide('composerHostPatch', hostPatch)
+  ctx.effect(() => () => hostPatch.dispose(), `${PACKAGE_NAME}.host-patch`)
 
   const contribution: TypertContribution = {
     package: PACKAGE_NAME,
     face: 'host',
     schemas: [],
-    invocations: PLUGIN_REMOTE.descriptors,
+    invocations: [...PLUGIN_REMOTE.descriptors, ...HOST_PATCH_REMOTE.descriptors],
     model: { services: [], events: [], objects: [] },
   }
   const unregister = ctx.typert.register(contribution)
-  ctx.effect(() => () => { unregister(); exchange.dispose() }, `${PACKAGE_NAME}.remote`)
+  ctx.effect(() => () => unregister(), `${PACKAGE_NAME}.remote`)
+  void hostPatch.start()
 }
