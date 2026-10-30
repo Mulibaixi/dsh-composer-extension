@@ -43,7 +43,7 @@ export const PLUGIN_REMOTE: TypertRemoteContribution = {
 
 export const HOST_PATCH_REMOTE: TypertRemoteContribution = {
   package: PACKAGE_NAME,
-  descriptors: (['status', 'recheck', 'restore', 'confirm'] as const).map(method => ({
+  descriptors: (['status', 'recheck', 'restore', 'confirm', 'useNative'] as const).map(method => ({
     id: `${PACKAGE_NAME}#composerHostPatch/${method}`,
     service: 'composerHostPatch',
     namespace: 'composerHostPatch',

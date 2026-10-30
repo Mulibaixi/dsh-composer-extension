@@ -12,6 +12,7 @@ export interface HostPatchService {
   recheck(): Promise<HostPatchStatus>
   restore(): Promise<HostPatchStatus>
   confirm(): Promise<HostPatchStatus>
+  useNative(): Promise<HostPatchStatus>
 }
 
 declare module '@deepseek-ai/cordis' {

@@ -39,14 +39,16 @@
 
 ## 环境与依赖
 
-- 支持本扩展的配套 DSH `0.2.0-rc.2`、`0.2.1-rc.2` 或 `0.2.1-rc.3` 构建。
+- DSH `>=0.2.0-rc.2`，具备本扩展所需的插件与主会话接口。兼容性按接口能力判断，不逐个列举 DSH 版本。
 - 当前翻译工作流需要与本扩展配套构建的 `dsh-translation-plugin`，提供翻译工作区和实际任务。当前配套使用内容协议 3 和任务阶段协议 2。
 - 在 DSH 中配置可用模型；翻译模型主动请求补充信息还需要该模型支持工具调用。
 - 从源码构建需要 Node.js 22 或更高版本及 pnpm。
 
-受支持版本的官方原版 DSH 需要匹配的宿主补丁才能联动发送。**包含补丁产物的扩展构建可在 Windows 桌面版 DSH `0.2.1-rc.3` 中自动检测和准备补丁，正常完全退出后自动安装，重新打开生效。** 已安装相同补丁时跳过，用户无需另装 Node 或运行独立脚本。
+联动发送需要 submissions protocol 1。宿主已有该接口时直接使用，无需替换文件；缺少时，**Windows 桌面版会按目标模块指纹匹配随包补丁，正常完全退出后自动安装，重新打开生效。** DSH 更新后相关模块内容不变，可继续复用补丁，不因版本号变化要求更新扩展。已安装相同补丁时跳过，用户无需另装 Node 或运行独立脚本。
 
-其他环境和旧版仍使用 [0.2.0-rc.2 补丁](patches/rc2-composer-submissions-v1.patch)及其[源码清单](patches/source-manifest.json)，或 [0.2.1-rc.2 补丁](patches/dsh-0.2.1-rc.2-composer-submissions-v1.patch)及其[源码清单](patches/source-manifest-0.2.1-rc.2.json)。rc.3 的[源码补丁](patches/dsh-0.2.1-rc.3-composer-submissions-v1.patch)及[清单](patches/source-manifest-0.2.1-rc.3.json)保留用于构建。新 DSH 版本仍需先更新至已适配的扩展。
+当前自动补丁产物基于 DSH `0.2.1-rc.3` 和 `0.2.1-rc.5` 构建；这是构建基线，不是插件兼容版本白名单。目标模块已改变且宿主仍缺少提交接口时，会提示需要新的补丁产物，停止自动替换；其他已有能力可继续使用。未来宿主若改变所需接口，仍需适配。
+
+其他环境和旧版可使用 [0.2.0-rc.2 补丁](patches/rc2-composer-submissions-v1.patch)及其[源码清单](patches/source-manifest.json)，或 [0.2.1-rc.2 补丁](patches/dsh-0.2.1-rc.2-composer-submissions-v1.patch)及其[源码清单](patches/source-manifest-0.2.1-rc.2.json)。另提供 rc.3 的[源码补丁](patches/dsh-0.2.1-rc.3-composer-submissions-v1.patch)及[清单](patches/source-manifest-0.2.1-rc.3.json)、rc.5 的[源码补丁](patches/dsh-0.2.1-rc.5-composer-submissions-v1.patch)及[清单](patches/source-manifest-0.2.1-rc.5.json)。
 
 ## 安装与更新
 
@@ -97,7 +99,7 @@ pnpm build
 pnpm pack
 ```
 
-工具核验固定源码补丁，在提供的源码目录应用补丁并构建，输出到 `dist/host-patches/<版本>/`；包括两个联动客户端模块及修正重启提示的插件管理模块。需要 Node.js 22.19 或更高版本。`--from-build` 可复用已校验源码的现有产物。打包会检查 rc.3 产物和助手完整性，生成文件不提交源码仓库。
+工具核验固定源码补丁，在提供的源码目录应用补丁并构建，输出到 `dist/host-patches/<构建版本>/`；包括两个联动客户端模块及修正重启提示的插件管理模块。可对多个基线分别运行并一起打包；目录版本只记录产物来源，运行时仍核对实际目标模块指纹。需要 Node.js 22.19 或更高版本。`--from-build` 可复用已校验源码的现有产物。打包检查各组产物和助手完整性，生成文件不提交源码仓库。
 
 ## 使用说明
 

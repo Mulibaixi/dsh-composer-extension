@@ -14,6 +14,7 @@ const { createReadStream, createWriteStream } = archiveFileSystem
 const { mkdir, open, readFile, rm, stat } = archiveFileSystem.promises
 
 export interface HostPatchManifest {
+  /** Build provenance; runtime compatibility is checked against target-module fingerprints. */
   readonly dshVersion: string
   readonly composerProtocol: 1
   readonly files: readonly {
@@ -126,11 +127,14 @@ function checkManifest(manifest: HostPatchManifest): void {
   }
 }
 
-async function inspect(input: Archive, manifest: HostPatchManifest, artifactDir: string): Promise<boolean> {
+async function inspect(input: Archive, manifest: HostPatchManifest, artifactDir: string): Promise<{ installed: boolean; dshVersion: string }> {
   checkManifest(manifest)
+  let dshVersion = ''
   for (const name of packages) {
     const metadata = JSON.parse((await input.contents(`dsh/node_modules/@deepseek-ai/${name}/package.json`)).toString('utf8')) as { version?: unknown }
-    if (metadata.version !== manifest.dshVersion) throw new Error(`宿主版本不匹配：${name} 应为 ${manifest.dshVersion}，实际为 ${String(metadata.version)}。`)
+    if (typeof metadata.version !== 'string' || !/^\d+\.\d+\.\d+(?:-[a-zA-Z0-9.-]+)?$/u.test(metadata.version)) throw new Error(`无法识别宿主模块版本：${name}。`)
+    if (dshVersion && metadata.version !== dshVersion) throw new Error(`宿主模块版本不一致：${name} 应为 ${dshVersion}，实际为 ${metadata.version}。`)
+    dshVersion = metadata.version
   }
   let installed = true
   for (const artifact of manifest.files) {
@@ -138,15 +142,15 @@ async function inspect(input: Archive, manifest: HostPatchManifest, artifactDir:
     if (sha(bytes) !== artifact.sha256) throw new Error(`联动补丁产物校验失败：${artifact.file}`)
     const current = sha(await input.contents(artifact.archivePath))
     if (current === artifact.sha256) continue
-    if (!artifact.beforeSha256.includes(current)) throw new Error(`当前安装文件与已适配版本不一致：${artifact.archivePath}`)
+    if (!artifact.beforeSha256.includes(current)) throw Object.assign(new Error(`当前安装文件与已适配版本不一致：${artifact.archivePath}`), { code: 'host_patch_mismatch' })
     installed = false
   }
-  return installed
+  return { installed, dshVersion }
 }
 
 export async function inspectOverlay(archivePath: string, manifest: HostPatchManifest, artifactDir: string): Promise<{ installed: boolean; dshVersion: string }> {
   const input = await readArchive(archivePath)
-  try { return { installed: await inspect(input, manifest, artifactDir), dshVersion: manifest.dshVersion } }
+  try { return await inspect(input, manifest, artifactDir) }
   finally { await input.close() }
 }
 
@@ -161,7 +165,7 @@ export async function prepareOverlay(archivePath: string, outputPath: string, ma
   const baseSha256 = await fileHash(archivePath), input = await readArchive(archivePath)
   let started = false
   try {
-    if (await inspect(input, manifest, artifactDir)) return { alreadyApplied: true, baseSha256, candidateSha256: baseSha256 }
+    if ((await inspect(input, manifest, artifactDir)).installed) return { alreadyApplied: true, baseSha256, candidateSha256: baseSha256 }
     let nextOffset = (await stat(archivePath)).size - input.offset
     const parts: Buffer[] = []
     for (const artifact of manifest.files) {

@@ -124,6 +124,15 @@ export class ComposerHostPatchService implements HostPatchService {
     return this.status()
   }
 
+  /** The Client has verified the native submissions protocol; no replacement is needed. */
+  async useNative(): Promise<HostPatchStatus> {
+    await this.running
+    if (this.disposed || this.current?.result || this.current?.job.operation === 'restore') return this.status()
+    if (this.current) { await this.cancelRecord(this.current); await this.removeCandidate(this.current.job); this.current = null }
+    this.snapshot = { state: 'installed', dshVersion: this.snapshot.dshVersion, message: '当前宿主已提供联动能力，无需安装补丁。', canRestore: false }
+    return this.status()
+  }
+
   async restore(): Promise<HostPatchStatus> {
     if (this.disposed || this.running || !this.snapshot.canRestore || !this.current) return this.status()
     const record = this.current
@@ -163,15 +172,28 @@ export class ComposerHostPatchService implements HostPatchService {
       version = metadata.version
     } finally { await archive.close() }
     this.snapshot = { ...this.snapshot, dshVersion: version }
-    const artifactDir = join(this.options.artifactsRoot ?? join(outputRoot, 'host-patches'), version)
-    let manifest: HostPatchManifest
-    try { manifest = await json(join(artifactDir, 'manifest.json')) as HostPatchManifest }
-    catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
-      this.snapshot = { state: 'unsupported', dshVersion: version, message: `当前扩展未附带 DSH ${version} 的自动安装产物，请使用匹配的 Composer 扩展构建。`, canRestore: false }
+    const artifactsRoot = this.options.artifactsRoot ?? join(outputRoot, 'host-patches')
+    const builds = await readdir(artifactsRoot, { withFileTypes: true }).catch(error => {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return []
+      throw error
+    })
+    const candidates = [...new Set([version, ...builds.filter(entry => entry.isDirectory() && /^\d+\.\d+\.\d+(?:-[a-zA-Z0-9.-]+)?$/.test(entry.name)).map(entry => entry.name)])]
+    let matched: { artifactDir: string; manifest: HostPatchManifest; inspection: { installed: boolean; dshVersion: string } } | undefined
+    for (const build of candidates) {
+      const artifactDir = join(artifactsRoot, build)
+      let manifest: HostPatchManifest
+      try { manifest = await json(join(artifactDir, 'manifest.json')) as HostPatchManifest }
+      catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') continue; throw error }
+      try {
+        matched = { artifactDir, manifest, inspection: await inspectOverlay(installation.archivePath, manifest, artifactDir) }
+        break
+      } catch (error) { if ((error as { code?: string }).code !== 'host_patch_mismatch') throw error }
+    }
+    if (!matched) {
+      this.snapshot = { state: 'unsupported', dshVersion: version, message: '当前宿主模块尚无匹配的自动补丁产物，请更新 Composer 扩展；已有联动能力可继续使用。', canRestore: false }
       return
     }
-    const inspection = await inspectOverlay(installation.archivePath, manifest, artifactDir)
+    const { artifactDir, manifest, inspection } = matched
     const previous = await this.readRecord()
     if (previous && !previous.result) await this.cancelRecord(previous)
     if (previous && (!previous.result || previous.result.state === 'cancelled' || previous.result.state === 'failed')) await this.removeCandidate(previous.job)

@@ -15,7 +15,7 @@ export function adaptHostPatchRemote(remote: HostPatchRemotePort): HostPatchServ
     if (typeof result !== 'object' || result === null || result.ok !== true) throw new Error('host_patch_remote_unavailable')
     return parseHostPatchStatus(result.value)
   }
-  return { status: () => invoke('status'), recheck: () => invoke('recheck'), restore: () => invoke('restore'), confirm: () => invoke('confirm') }
+  return { status: () => invoke('status'), recheck: () => invoke('recheck'), restore: () => invoke('restore'), confirm: () => invoke('confirm'), useNative: () => invoke('useNative') }
 }
 
 export interface HostPatchClientView {
@@ -79,6 +79,11 @@ export class HostPatchClient {
     try {
       let status = parseHostPatchStatus(await this.remote[action]())
       if (this.disposed) return
+      if (action !== 'restore' && this.composer.capabilities().state === 'available' &&
+        ['checking', 'preparing', 'pending', 'unsupported', 'failed'].includes(status.state)) {
+        status = parseHostPatchStatus(await this.remote.useNative())
+        if (this.disposed) return
+      }
       if (status.state === 'applied' && this.composer.capabilities().state === 'available') {
         status = parseHostPatchStatus(await this.remote.confirm())
         if (this.disposed) return

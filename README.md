@@ -39,14 +39,16 @@ General-purpose collaboration is a future goal. The current interfaces are still
 
 ## Requirements
 
-- A companion DSH `0.2.0-rc.2`, `0.2.1-rc.2`, or `0.2.1-rc.3` build supporting the extension.
+- DSH `>=0.2.0-rc.2` with the plugin and main-session interfaces required by this extension. Compatibility follows interface capabilities rather than an enumerated list of DSH versions.
 - The current translation workflow requires a companion build of `dsh-translation-plugin` providing the workspace and translation tasks. The companion builds use content protocol 3 and task-phase protocol 2.
 - Configured models in DSH. Context requests from the translation model also require tool-call support in that model.
 - Node.js 22 or later and pnpm to build from source.
 
-Official DSH needs a matching host patch for linked submission. **Extension builds containing the patch artifacts can detect and prepare the patch on Windows Desktop DSH `0.2.1-rc.3`, install it after a normal full exit, and use it when DSH is reopened.** An identical patch is skipped. Users need no separate Node installation or installer script.
+Linked submission requires submissions protocol 1. An existing host interface is used directly without replacing files. Otherwise, **Windows Desktop matches bundled patches by target-module fingerprints, installs after a normal full exit, and uses them when DSH is reopened.** If an update leaves the relevant modules unchanged, the patch can be reused without updating the extension merely for a new version number. An identical installed patch is skipped. Users need no separate Node installation or installer script.
 
-Other environments and older versions still use the [0.2.0-rc.2 patch](patches/rc2-composer-submissions-v1.patch) and [manifest](patches/source-manifest.json), or the [0.2.1-rc.2 patch](patches/dsh-0.2.1-rc.2-composer-submissions-v1.patch) and [manifest](patches/source-manifest-0.2.1-rc.2.json). The rc.3 [source patch](patches/dsh-0.2.1-rc.3-composer-submissions-v1.patch) and [manifest](patches/source-manifest-0.2.1-rc.3.json) remain available for builds. A new DSH version still requires an adapted extension.
+The current automatic patch artifacts are built from DSH `0.2.1-rc.3` and `0.2.1-rc.5`. These are build baselines, not an exhaustive plugin compatibility list. If target modules change and the host still lacks the submission interface, automatic replacement stops and requests new patch artifacts; other available capabilities remain usable. Future changes to required host interfaces may still need adaptation.
+
+Other environments and older versions can use the [0.2.0-rc.2 patch](patches/rc2-composer-submissions-v1.patch) and [manifest](patches/source-manifest.json), or the [0.2.1-rc.2 patch](patches/dsh-0.2.1-rc.2-composer-submissions-v1.patch) and [manifest](patches/source-manifest-0.2.1-rc.2.json). Also available are the rc.3 [source patch](patches/dsh-0.2.1-rc.3-composer-submissions-v1.patch) and [manifest](patches/source-manifest-0.2.1-rc.3.json), and the rc.5 [source patch](patches/dsh-0.2.1-rc.5-composer-submissions-v1.patch) and [manifest](patches/source-manifest-0.2.1-rc.5.json).
 
 ## Installation and updates
 
@@ -97,7 +99,7 @@ pnpm build
 pnpm pack
 ```
 
-The tool validates and applies the fixed source patch in the provided source tree, then builds into `dist/host-patches/<version>/`: two linked-submission modules and the plugin manager with corrected restart copy. It needs Node.js 22.19 or later; `--from-build` reuses existing artifacts after source validation. Packaging checks rc.3 artifacts and helper integrity. Generated files do not enter the source repository.
+The tool validates and applies the fixed source patch in the provided source tree, then builds into `dist/host-patches/<build-version>/`: two linked-submission modules and the plugin manager with corrected restart copy. Run it for multiple baselines to bundle them together. Directory versions record build provenance; runtime checks compare actual target-module fingerprints. It needs Node.js 22.19 or later; `--from-build` reuses existing artifacts after source validation. Packaging checks each artifact set and helper integrity. Generated files do not enter the source repository.
 
 ## User guide
 
