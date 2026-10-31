@@ -3,6 +3,7 @@
 [English](README.md) | [简体中文](README.zh-CN.md)
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![GitHub Release](https://img.shields.io/github/v/release/Mulibaixi/dsh-composer-extension?label=release)](https://github.com/Mulibaixi/dsh-composer-extension/releases/latest)
 
 Provides linked material submission and task coordination for the main chat input in DeepSeek Harness (DSH), with the goal of gradually supporting collaboration between the main conversation and different plugins.
 
@@ -54,8 +55,8 @@ Other environments and older versions can use the [0.2.0-rc.2 patch](patches/rc2
 
 ### Install
 
-1. Obtain a `dsh-composer-extension-<version>.tgz` distribution containing the host patch artifacts. Enter its full local path or download URL in DSH's plugin manager, then install and enable it. Distribution packages include the build output and need no local build.
-2. Install and enable a matching translation plugin. If the workspace and maintenance command are available, check them directly; fully restart if the plugin manager requests it. Open **Composer：联动组件维护**. If the component is prepared and awaiting installation, exit DSH completely and reopen it to apply the patch.
+1. Download `dsh-composer-extension-<version>.tgz` from [Releases](https://github.com/Mulibaixi/dsh-composer-extension/releases/latest). Enter its full local path or the asset's download URL in DSH's plugin manager, then install and enable it. Choose the `.tgz` asset containing the build output and host patch artifacts; no local build is needed.
+2. Then install and enable the companion translation plugin from its [Releases](https://github.com/Mulibaixi/dsh-translation-plugin/releases/latest). Composer **0.4.5** provides the content protocol 3 and task-phase protocol 2 used by the current translation workflow. If the workspace and maintenance command are available, check them directly; fully restart if the plugin manager requests it. Open **Composer：联动组件维护**. If the component is prepared and awaiting installation, exit DSH completely and reopen it to apply the patch.
 3. Open the translation workspace and confirm that Normal mode does not report missing material-submission support.
 
 ### Build from source
@@ -140,12 +141,12 @@ After you stop the main model, late notices do not substitute for a new user ins
 
 ## Projects and documentation
 
-The GitHub links below use the planned publication URLs.
-
 | Entry | Link |
 | --- | --- |
 | Composer extension | [Mulibaixi/dsh-composer-extension](https://github.com/Mulibaixi/dsh-composer-extension) |
 | Translation plugin | [Mulibaixi/dsh-translation-plugin](https://github.com/Mulibaixi/dsh-translation-plugin) |
+| Distribution packages | [Composer releases](https://github.com/Mulibaixi/dsh-composer-extension/releases) · [Translation releases](https://github.com/Mulibaixi/dsh-translation-plugin/releases) |
+| Bug reports | [Composer issues](https://github.com/Mulibaixi/dsh-composer-extension/issues) |
 | Installation and component maintenance | [Installation and updates](#installation-and-updates) |
 | Operations | [User guide](#user-guide) |
 | Changes | [CHANGELOG](CHANGELOG.md) |

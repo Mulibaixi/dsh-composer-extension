@@ -3,6 +3,7 @@
 [English](README.md) | [简体中文](README.zh-CN.md)
 
 [![许可证：MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![GitHub Release](https://img.shields.io/github/v/release/Mulibaixi/dsh-composer-extension?label=release)](https://github.com/Mulibaixi/dsh-composer-extension/releases/latest)
 
 为 DeepSeek Harness（DSH）的主聊天输入框提供材料联动与任务协调能力，目标是逐步支持主会话与不同插件之间的协作交互。
 
@@ -54,8 +55,8 @@
 
 ### 安装
 
-1. 取得包含宿主补丁产物的 `dsh-composer-extension-<版本>.tgz` 分发包，在 DSH 插件管理器的安装输入框中填写安装包的完整路径或下载链接，安装并启用。分发包包含构建产物，使用者无需本地构建。
-2. 安装并启用匹配的翻译插件。工作区和维护命令已可用时可以直接检查；若插件管理器提示需要重启，再完整退出并重开。打开“Composer：联动组件维护”；若提示联动组件已准备、等待安装，正常完全退出 DSH 并重新打开以应用补丁。
+1. 从 [Releases](https://github.com/Mulibaixi/dsh-composer-extension/releases/latest) 下载 `dsh-composer-extension-<版本>.tgz`，在 DSH 插件管理器的安装输入框中填写安装包的完整路径或附件下载链接，安装并启用。选择包含构建产物与宿主补丁的 `.tgz` 附件，使用者无需本地构建。
+2. 再从[翻译插件 Releases](https://github.com/Mulibaixi/dsh-translation-plugin/releases/latest) 安装并启用配套翻译插件。**Composer 0.4.5** 提供当前翻译工作流使用的内容协议 3 与任务阶段协议 2。工作区和维护命令已可用时可以直接检查；若插件管理器提示需要重启，再完整退出并重开。打开“Composer：联动组件维护”；若提示联动组件已准备、等待安装，正常完全退出 DSH 并重新打开以应用补丁。
 3. 打开翻译工作区，确认普通模式未提示材料提交能力缺失。
 
 ### 从源码构建
@@ -140,12 +141,12 @@ pnpm pack
 
 ## 项目与文档
 
-GitHub 仓库链接按计划发布地址预留。
-
 | 入口 | 链接 |
 | --- | --- |
 | Composer 扩展 | [Mulibaixi/dsh-composer-extension](https://github.com/Mulibaixi/dsh-composer-extension) |
 | 翻译插件 | [Mulibaixi/dsh-translation-plugin](https://github.com/Mulibaixi/dsh-translation-plugin) |
+| 分发包 | [Composer 发行页](https://github.com/Mulibaixi/dsh-composer-extension/releases) · [翻译插件发行页](https://github.com/Mulibaixi/dsh-translation-plugin/releases) |
+| 问题反馈 | [Composer Issues](https://github.com/Mulibaixi/dsh-composer-extension/issues) |
 | 安装与组件维护 | [安装与更新](#安装与更新) |
 | 操作说明 | [使用说明](#使用说明) |
 | 更新记录 | [CHANGELOG](CHANGELOG.md) |

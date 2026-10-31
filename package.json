@@ -4,6 +4,14 @@
   "private": true,
   "license": "MIT",
   "description": "Material submission and task coordination for translation and refinement workflows in DeepSeek Harness.",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Mulibaixi/dsh-composer-extension.git"
+  },
+  "homepage": "https://github.com/Mulibaixi/dsh-composer-extension#readme",
+  "bugs": {
+    "url": "https://github.com/Mulibaixi/dsh-composer-extension/issues"
+  },
   "type": "module",
   "main": "./dist/host/index.js",
   "types": "./dist/host/index.d.ts",
