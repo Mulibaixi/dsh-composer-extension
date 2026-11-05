@@ -44,6 +44,7 @@ export interface Archive {
 
 const packages = ['dsh-llm', 'dsh-api-session-controller', 'dsh-client-ui-conversation', 'dsh-client-ui-plugin-manager'] as const
 const targets = packages.slice(1).map(name => `dsh/node_modules/@deepseek-ai/${name}/lib/client.js`)
+const desktopTarget = 'lib/main.js'
 const sha = (bytes: Uint8Array): string => createHash('sha256').update(bytes).digest('hex')
 const hashPattern = /^[a-f0-9]{64}$/u
 
@@ -113,18 +114,20 @@ export async function readArchive(path: string): Promise<Archive> {
 
 function checkManifest(manifest: HostPatchManifest): void {
   if (!manifest || !/^\d+\.\d+\.\d+(?:-[a-zA-Z0-9.-]+)?$/u.test(manifest.dshVersion)
-    || manifest.composerProtocol !== 1 || !Array.isArray(manifest.files) || manifest.files.length !== targets.length) {
+    || manifest.composerProtocol !== 1 || !Array.isArray(manifest.files)
+    || (manifest.files.length !== targets.length && manifest.files.length !== targets.length + 1)) {
     throw new Error('联动补丁清单无效。')
   }
   const found = new Set<string>()
   for (const file of manifest.files) {
-    if (!targets.includes(file.archivePath) || found.has(file.archivePath)
+    if ((!targets.includes(file.archivePath) && file.archivePath !== desktopTarget) || found.has(file.archivePath)
       || typeof file.file !== 'string' || basename(file.file) !== file.file || file.file.includes('\\')
       || !file.file.endsWith('.js') || !hashPattern.test(file.sha256)
       || !Array.isArray(file.beforeSha256) || !file.beforeSha256.length
       || file.beforeSha256.some((hash: unknown) => typeof hash !== 'string' || !hashPattern.test(hash))) throw new Error('联动补丁文件清单无效。')
     found.add(file.archivePath)
   }
+  if (targets.some(path => !found.has(path))) throw new Error('联动补丁文件清单缺少必要模块。')
 }
 
 async function inspect(input: Archive, manifest: HostPatchManifest, artifactDir: string): Promise<{ installed: boolean; dshVersion: string }> {

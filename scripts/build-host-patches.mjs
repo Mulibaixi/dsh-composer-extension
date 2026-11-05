@@ -5,6 +5,7 @@ import { createRequire } from 'node:module'
 import { dirname, join, relative, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { inspectOverlay, readArchive } from '../src/host/asar-overlay.ts'
+import { patchDesktopMain } from './desktop-cookie-patch.mjs'
 
 const project = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const sha = bytes => createHash('sha256').update(bytes).digest('hex')
@@ -15,7 +16,7 @@ function argumentsOf(argv) {
     console.log('Usage: node scripts/build-host-patches.mjs --source <DSH source> --archive <official app.asar> [--output <artifact root>] [--from-build]')
     console.log('Requires Node.js 22.19+ and the fixed DSH source tree with its build dependencies installed.')
     console.log('The source is patched in place. --from-build reuses its existing browser bundles after source checks.')
-    console.log('Output: <artifact root>/<DSH version>/manifest.json and three client.js files; default root: dist/host-patches.')
+    console.log('Output: <artifact root>/<DSH version>/manifest.json, three client.js files and the Desktop startup fix where declared; default root: dist/host-patches.')
     return undefined
   }
   const result = { output: join(project, 'dist/host-patches'), fromBuild: false }
@@ -103,9 +104,12 @@ async function main(options) {
   const baseline = JSON.parse(await readFile(join(project, `patches/host-baseline-${version}.json`), 'utf8'))
   if (baseline.dshVersion !== version || sourceManifest.upstreamTag !== `dsh-v${version}` || sourceManifest.composerProtocol !== 1) throw new Error('Source version and manifests disagree.')
   const archive = await readArchive(options.archive)
+  let desktopMain
   try {
     for (const file of baseline.files) {
-      if (sha(await archive.contents(file.archivePath)) !== file.upstreamSha256) throw new Error(`The --archive must be the official unmodified baseline: ${file.archivePath}`)
+      const bytes = await archive.contents(file.archivePath)
+      if (sha(bytes) !== file.upstreamSha256) throw new Error(`The --archive must be the official unmodified baseline: ${file.archivePath}`)
+      if (file.archivePath === 'lib/main.js') desktopMain = bytes
     }
   } finally { await archive.close() }
   await verifySource(options.source, sourceManifest, join(project, 'patches', sourceManifest.patch.file))
@@ -114,12 +118,16 @@ async function main(options) {
   await mkdir(output, { recursive: true })
   const files = []
   for (const [index, file] of baseline.files.entries()) {
-    const input = join(options.source, packages[index], 'lib/client.js')
-    await access(input)
-    // Virtual CSS module region labels contain absolute build paths. Remove
-    // only grouping comments; retain code and dependency license notices.
-    const bytes = Buffer.from((await readFile(input, 'utf8')).replace(/^[\t ]*\/\/#(?:end)?region[^\r\n]*(?:\r?\n|$)/gm, ''))
-    if (bytes.length === 0 || !bytes.toString('utf8').includes('__ModuleLoader__.load')) throw new Error(`Invalid browser client bundle: ${input}`)
+    let bytes
+    if (file.archivePath === 'lib/main.js') bytes = patchDesktopMain(desktopMain)
+    else {
+      const input = join(options.source, packages[index], 'lib/client.js')
+      await access(input)
+      // Virtual CSS module region labels contain absolute build paths. Remove
+      // only grouping comments; retain code and dependency license notices.
+      bytes = Buffer.from((await readFile(input, 'utf8')).replace(/^[\t ]*\/\/#(?:end)?region[^\r\n]*(?:\r?\n|$)/gm, ''))
+      if (bytes.length === 0 || !bytes.toString('utf8').includes('__ModuleLoader__.load')) throw new Error(`Invalid browser client bundle: ${input}`)
+    }
     await writeFile(join(output, file.file), bytes)
     files.push({ archivePath: file.archivePath, file: file.file,
       beforeSha256: [...new Set([file.upstreamSha256, ...file.knownPatchSha256])], sha256: sha(bytes) })

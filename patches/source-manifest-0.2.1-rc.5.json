@@ -4,9 +4,14 @@
   "composerProtocol": 1,
   "patch": {
     "file": "dsh-0.2.1-rc.5-composer-submissions-v1.patch",
-    "sha256": "4bf7378ad63d280cb88f159bebfffd83c50fe941bf358a5d46d0205ed476d137"
+    "sha256": "4e2e9a5c30a1b4848206d86f6ae8a5f877fd4950d2b3763b6bf2156d1dc19ee0"
   },
   "files": [
+    {
+      "path": "apps/desktop/src/main.ts",
+      "upstreamSha256": "e345eda0425f2df795d20413bb87bb9a3ddc46e71ceb1cec0755ad1cca3fb847",
+      "patchedSha256": "b3dde61da6c973e3339817906db0c46650e477d3bea5ae621b447db8b77830de"
+    },
     {
       "path": "packages/api/session-controller/src/client/contract/session.ts",
       "upstreamSha256": "fa0d217edc0a5ac2a6e90301a2320d2f62e81fac1db33dac38f96d14fdf179d1",

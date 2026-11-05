@@ -21,6 +21,12 @@
       "file": "dsh-client-ui-plugin-manager.client.js",
       "upstreamSha256": "4b6caa02c9336e3a118e56635164697d4793c29eb259f4a3eddde39ad1bcaa78",
       "knownPatchSha256": []
+    },
+    {
+      "archivePath": "lib/main.js",
+      "file": "desktop.main.js",
+      "upstreamSha256": "9712da3c65d5d4262da7e6d41dad30586070c8eb47f078c62165de2bdba572c3",
+      "knownPatchSha256": []
     }
   ]
 }

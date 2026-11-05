@@ -482,3 +482,23 @@ diff --git a/packages/client/ui-plugin-manager/src/client/locales.ts b/packages/
    restartReasonHostModule: 'The change reaches modules DSH itself loaded.',
    restartReasonUnmanagedPlugin: 'The change reaches a plugin running outside the plugin list.',
    restartReasonModuleComparison: 'DSH could not compare the loaded plugins with their files.',
+diff --git a/apps/desktop/src/main.ts b/apps/desktop/src/main.ts
+--- a/apps/desktop/src/main.ts
++++ b/apps/desktop/src/main.ts
+@@ -452,6 +452,16 @@
+       start: async () => {
+         const ready = await host.start()
+         hostCookie = await authenticateWebHost(ready.url)
++        const currentCookieName = hostCookie.slice(0, hostCookie.indexOf('='))
++        const cookieUrl = new URL(ready.url)
++        if (cookieUrl.hostname === '127.0.0.1') {
++          for (const cookie of await session.defaultSession.cookies.get({ url: cookieUrl.href })) {
++            if (cookie.domain === '127.0.0.1' && cookie.path === '/'
++              && cookie.name.startsWith('dsh-auth-') && cookie.name !== currentCookieName) {
++              await session.defaultSession.cookies.remove(cookieUrl.origin + '/', cookie.name)
++            }
++          }
++        }
+         hostUrl = ready.url
+         if (ready.injections === undefined) throw new Error('Desktop Host did not provide boot injections')
+         injections = ready.injections

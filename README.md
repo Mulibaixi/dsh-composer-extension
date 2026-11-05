@@ -28,7 +28,7 @@ The translation plugin manages execution, session history, translation versions,
 | Key-stage notices | Deliver messages requiring main-model attention for integrated analysis or document tasks. |
 | Stop and stale-task handling | Avoid waking a user-stopped main model for late task messages, and prevent stale notices from being treated as current tasks. |
 
-Current translation-model interactions start from specific user actions. The translation model cannot yet proactively ask the main model for additional information. Task coordination covers integrated analysis and document stages; platform and DSH-version requirements for the linked-submission patch are described below.
+Translation interactions start from specific user tasks. With a companion translation plugin that supports context questions and a tool-capable translation model, the main model can answer focused questions or ask you before making a supplemented translation call. Task coordination covers integrated analysis and document stages; platform and DSH-version requirements for the linked-submission patch are described below.
 
 ## Development direction
 
@@ -45,9 +45,11 @@ General-purpose collaboration is a future goal. The current interfaces are still
 - Configured models in DSH.
 - Node.js 22 or later and pnpm to build from source.
 
-Linked submission requires submissions protocol 1. An existing host interface is used directly without replacing files. Otherwise, **Windows Desktop matches bundled patches by target-module fingerprints, installs after a normal full exit, and uses them when DSH is reopened.** If an update leaves the relevant modules unchanged, the patch can be reused without updating the extension merely for a new version number. An identical installed patch is skipped. Users need no separate Node installation or installer script.
+Linked submission requires submissions protocol 1. An available host interface skips Client-only replacements; Desktop startup fixes are checked separately. **Windows Desktop matches required bundled patches by target-module fingerprints, installs after a normal full exit, and uses them when DSH is reopened.** If an update leaves the relevant modules unchanged, the patch can be reused without updating the extension merely for a new version number. An identical installed patch is skipped. Users need no separate Node installation or installer script.
 
 The current automatic patch artifacts are built from DSH `0.2.1-rc.3` and `0.2.1-rc.5`. These are build baselines, not an exhaustive plugin compatibility list. If target modules change and the host still lacks the submission interface, automatic replacement stops and requests new patch artifacts; other available capabilities remain usable. Future changes to required host interfaces may still need adaptation.
+
+On supported Windows Desktop installations, the rc.5-based startup patch keeps only the current local Host authentication cookie and removes obsolete cookies of the same type. Other cookies are unchanged. This takes effect after the updated host patch is installed and DSH is reopened.
 
 Other environments and older versions can use the [0.2.0-rc.2 patch](patches/rc2-composer-submissions-v1.patch) and [manifest](patches/source-manifest.json), or the [0.2.1-rc.2 patch](patches/dsh-0.2.1-rc.2-composer-submissions-v1.patch) and [manifest](patches/source-manifest-0.2.1-rc.2.json). Also available are the rc.3 [source patch](patches/dsh-0.2.1-rc.3-composer-submissions-v1.patch) and [manifest](patches/source-manifest-0.2.1-rc.3.json), and the rc.5 [source patch](patches/dsh-0.2.1-rc.5-composer-submissions-v1.patch) and [manifest](patches/source-manifest-0.2.1-rc.5.json).
 
@@ -56,7 +58,7 @@ Other environments and older versions can use the [0.2.0-rc.2 patch](patches/rc2
 ### Install
 
 1. Download `dsh-composer-extension-<version>.tgz` from [Releases](https://github.com/Mulibaixi/dsh-composer-extension/releases/latest). Enter its full local path or the asset's download URL in DSH's plugin manager, then install and enable it. Choose the `.tgz` asset containing the build output and host patch artifacts; no local build is needed.
-2. Then install and enable the companion translation plugin from its [Releases](https://github.com/Mulibaixi/dsh-translation-plugin/releases/latest). Composer **0.4.5** provides the content protocol 3 and task-phase protocol 2 used by the current translation workflow. If the workspace and maintenance command are available, check them directly; fully restart if the plugin manager requests it. Open **Composer：联动组件维护**. If the component is prepared and awaiting installation, exit DSH completely and reopen it to apply the patch.
+2. Then install and enable the companion translation plugin from its [Releases](https://github.com/Mulibaixi/dsh-translation-plugin/releases/latest). Composer **0.4.6** provides the content protocol 3 and task-phase protocol 2 used by the current translation workflow. If the workspace and maintenance command are available, check them directly; fully restart if the plugin manager requests it. Open **Composer：联动组件维护**. If the component is prepared and awaiting installation, exit DSH completely and reopen it to apply the patch.
 3. Open the translation workspace and confirm that Normal mode does not report missing material-submission support.
 
 ### Build from source
@@ -90,7 +92,7 @@ Choose **Composer：联动组件维护** in the command list, or enter `/compose
 
 **Disabling or uninstalling this extension through DSH's plugin manager automatically schedules restoration of a patch installed by this extension. Restoration completes after DSH exits completely.** The helper and recovery files stay outside the extension directory and remain usable after the package is removed. A normal reload retains the installed patch; enabling the extension again before exit cancels a detected pending automatic restoration. To resume Normal translation, install or enable the extension again and follow its linked-component maintenance status.
 
-Automatic restoration requires a valid installation record and backup owned by the extension. It returns to the state before that installation; manual or early development patches need separate recovery. An upgraded host or invalid backup stops restoration rather than overwriting a later installation.
+Automatic restoration requires a valid installation record and backup owned by the extension. It returns to the state before that installation. For a patch upgrade, the restored state can still contain the previous patch. Manual or early development patches need separate recovery. An upgraded host or invalid backup stops restoration rather than overwriting a later installation.
 
 Host-patch backups are under `dsh-composer-extension/host-patches/` in the current user's local application data directory, separate from translation-library backups. If DSH cannot open, exit it completely and run the corresponding task's `apply-host-patch.ps1 -JobPath <job.json> -Recover`. Recovery validates the version and hashes and refuses to replace a subsequently upgraded archive. A restored host is patched again only after **重新检测** is selected.
 
@@ -104,7 +106,7 @@ pnpm build
 pnpm pack
 ```
 
-The tool validates and applies the fixed source patch in the provided source tree, then builds into `dist/host-patches/<build-version>/`: two linked-submission modules and the plugin manager with corrected restart copy. Run it for multiple baselines to bundle them together. Directory versions record build provenance; runtime checks compare actual target-module fingerprints. It needs Node.js 22.19 or later; `--from-build` reuses existing artifacts after source validation. Packaging checks each artifact set and helper integrity. Generated files do not enter the source repository.
+The tool validates and applies the fixed source patch in the provided source tree, then builds into `dist/host-patches/<build-version>/`. The rc.5 set contains three Client modules—two for linked submission and the plugin manager with corrected restart copy—plus the Desktop main entry for startup cookie maintenance. Earlier rc.2/rc.3 sets retain three Client modules. Run it for multiple baselines to bundle them together. Directory versions record build provenance; runtime checks compare actual target-module fingerprints. It needs Node.js 22.19 or later; `--from-build` reuses existing artifacts after source validation. Packaging checks each artifact set and helper integrity. Generated files do not enter the source repository.
 
 ## User guide
 
@@ -122,7 +124,7 @@ Submission retains the source as sent. Editing the next draft does not rewrite i
 
 Describe the current goal or specify information in the main chat. The main model consolidates the relevant background and translation requirements, then delivers them to the translation model for the current translation or refinement.
 
-Current interactions start from specific user actions. The translation model does not yet initiate interactions on its own or proactively ask the main model for additional information.
+Interactions start from specific user tasks. During translation, a supported companion plugin can return the translation model's focused questions to the main model for clarification and a supplemented call.
 
 ### 3. When background work needs attention
 
@@ -135,7 +137,7 @@ After you stop the main model, late notices do not substitute for a new user ins
 ### 4. When a feature is unavailable
 
 - **Linked submission is unavailable**: check the companion DSH build, confirm both plugins are enabled, and restart DSH.
-- **Proactive requests for additional information**: proactive interaction is not supported yet. Specified information can be delivered to the translation model through the main model.
+- **Context questions**: Requires a companion translation plugin that supports this flow and a translation model with tool support. Question references last only for the current host run; each supplemented call has its own usage.
 - **No stage notice appears**: not all background workflows use this extension. Inspect progress and errors in the translation plugin instead of resubmitting solely because the main chat is quiet.
 - **Work does not continue after restart**: the extension does not automatically restore temporary exchanges. Check the original task in the translation plugin before explicitly choosing the next action.
 

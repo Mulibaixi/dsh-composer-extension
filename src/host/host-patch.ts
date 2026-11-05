@@ -109,6 +109,7 @@ export class ComposerHostPatchService implements HostPatchService {
   private shuttingDown = false
   private closePermission: Promise<boolean> | undefined
   private current: PatchRecord | null = null
+  private includesDesktopPatch = false
   private child: ChildProcess | undefined
   private readonly onMessage = (value: unknown): void => {
     if (typeof value === 'object' && value !== null && 'type' in value && value.type === 'shutdown') {
@@ -147,10 +148,10 @@ export class ComposerHostPatchService implements HostPatchService {
     return this.status()
   }
 
-  /** The Client has verified the native submissions protocol; no replacement is needed. */
+  /** Native submissions can replace a Client-only patch, but not Desktop maintenance. */
   async useNative(): Promise<HostPatchStatus> {
     await this.running
-    if (this.disposed || this.current?.result || this.current?.job.operation === 'restore') return this.status()
+    if (this.disposed || this.includesDesktopPatch || this.current?.result || this.current?.job.operation === 'restore') return this.status()
     if (this.current) { await this.cancelRecord(this.current); await this.removeCandidate(this.current.job); this.current = null }
     this.snapshot = { state: 'installed', dshVersion: this.snapshot.dshVersion, message: '当前宿主已提供联动能力，无需安装补丁。', canRestore: false }
     return this.status()
@@ -171,6 +172,7 @@ export class ComposerHostPatchService implements HostPatchService {
     if (this.disposed) return Promise.resolve()
     if (this.running) return this.running
     this.snapshot = emptyStatus()
+    this.includesDesktopPatch = false
     this.running = this.inspectAndPrepare(force).catch(error => this.failed(error)).finally(() => { this.running = undefined })
     return this.running
   }
@@ -217,6 +219,7 @@ export class ComposerHostPatchService implements HostPatchService {
       return
     }
     const { artifactDir, manifest, inspection } = matched
+    this.includesDesktopPatch = manifest.files.some(file => file.archivePath === 'lib/main.js')
     const previous = await this.readRecord()
     if (previous && !previous.result) await this.cancelRecord(previous)
     if (previous && (!previous.result || previous.result.state === 'cancelled' || previous.result.state === 'failed')) await this.removeCandidate(previous.job)
