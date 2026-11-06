@@ -14,7 +14,7 @@ const packages = ['packages/api/session-controller', 'packages/client/ui-convers
 function argumentsOf(argv) {
   if (argv.includes('--help')) {
     console.log('Usage: node scripts/build-host-patches.mjs --source <DSH source> --archive <official app.asar> [--output <artifact root>] [--from-build]')
-    console.log('Requires Node.js 22.19+ and the fixed DSH source tree with its build dependencies installed.')
+    console.log('Requires Node.js 22.19+ (24.9+ for DSH 0.2.2) and the fixed DSH source tree with its build dependencies installed.')
     console.log('The source is patched in place. --from-build reuses its existing browser bundles after source checks.')
     console.log('Output: <artifact root>/<DSH version>/manifest.json, three client.js files and the Desktop startup fix where declared; default root: dist/host-patches.')
     return undefined

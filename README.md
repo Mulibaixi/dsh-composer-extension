@@ -1,161 +1,163 @@
 # dsh-composer-extension
 
-[English](README.md) | [简体中文](README.zh-CN.md)
+[简体中文](README.md) | [English](README.en.md)
 
-[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![许可证：MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![GitHub Release](https://img.shields.io/github/v/release/Mulibaixi/dsh-composer-extension?label=release)](https://github.com/Mulibaixi/dsh-composer-extension/releases/latest)
 
-Provides linked material submission and task coordination for the main chat input in DeepSeek Harness (DSH), with the goal of gradually supporting collaboration between the main conversation and different plugins.
+为 DeepSeek Harness（DSH）的主聊天输入框提供材料联动与任务协调能力，目标是逐步支持主会话与不同插件之间的协作交互。
 
-The extension currently works with the translation workspace in `dsh-translation-plugin`. Prepare source material in the workspace, describe requirements in the main chat, and send both together. The main model can provide the translation model with consolidated background information and translation requirements for translation, refinement, and review.
+本扩展当前与 `dsh-translation-plugin` 的翻译工作区配合使用。用户可以在工作区准备原稿，在主聊天中说明要求，一次发送完成材料与指令的交接。主模型能够将整合好的背景信息和翻译要求提供给翻译模型，支持当前任务的翻译、润色和审阅。
 
-[What problem does it solve?](#what-problem-does-it-solve) · [Installation](#installation-and-updates) · [User guide](#user-guide) · [Development direction](#development-direction) · [Projects and documentation](#projects-and-documentation)
+[解决什么问题](#解决什么问题) · [安装](#安装与更新) · [使用说明](#使用说明) · [发展方向](#发展方向) · [项目与文档](#项目与文档)
 
-## What problem does it solve?
+## 解决什么问题
 
-- **Material and instructions get separated**: submit prepared translation material from the workspace with the main-chat message.
-- **Tasks may need information**: provide an interface for the main model to consolidate information and submit it to the translation model.
-- **Background work gets disconnected from the chat**: notify the owning main model at integrated task stages, reducing manual progress checking and result handoffs.
+- **材料与要求容易分散**：将工作区准备的待译材料随主聊天消息一起提交。
+- **任务中可能缺少信息**：提供主模型整合信息提交给翻译模型的协作接口。
+- **后台任务与主聊天脱节**：在接入的任务阶段提醒所属主模型继续处理，减少手动查看进度和传递结果的操作。
 
-The translation plugin manages execution, session history, translation versions, and memory assets; the Composer extension handles material handoffs and task coordination.
+翻译执行、会话历史、译文版本和记忆资产由翻译插件管理；Composer 扩展负责材料交接与任务协调。
 
-## What it can do today
+## 目前能做什么
 
-| Capability | Current role |
+| 能力 | 当前作用 |
 | --- | --- |
-| Linked submission | Connect the main chat input with the translation workspace to submit instructions and prepared material together. |
-| Supplementary information | Lets the main model deliver consolidated background information and translation requirements to the translation model. |
-| Key-stage notices | Deliver messages requiring main-model attention for integrated analysis or document tasks. |
-| Stop and stale-task handling | Avoid waking a user-stopped main model for late task messages, and prevent stale notices from being treated as current tasks. |
+| 联动发送 | 连接主聊天输入框与翻译工作区，一次提交要求和已准备的材料。 |
+| 补充信息 | 支持主模型将整合好的背景信息和翻译要求递交给翻译模型。 |
+| 关键阶段通知 | 为已接入的分析或文档任务传递需要主模型处理的阶段消息。 |
+| 停止与失效处理 | 用户停止主模型后，不因迟到的任务消息重新唤醒；失效通知不会继续作为有效任务处理。 |
 
-Translation interactions start from specific user tasks. With a companion translation plugin that supports context questions and a tool-capable translation model, the main model can answer focused questions or ask you before making a supplemented translation call. Task coordination covers integrated analysis and document stages; platform and DSH-version requirements for the linked-submission patch are described below.
+翻译交互以具体用户任务为起点。配合支持补充问题的翻译插件及支持工具调用的翻译模型，主模型可结合已有语境回答关键问题，或询问用户后发起补充翻译。任务协调覆盖已接入的分析与文档阶段，各平台和 DSH 版本的联动补丁要求见下文。
 
-## Development direction
+## 发展方向
 
-The future goal is to develop material submission, exchanges between the main conversation and plugin tasks, and stage notifications into collaboration capabilities that different plugins can adopt.
+后续希望将材料联动、主会话与插件任务之间的交流、阶段通知逐步整理为可供不同插件接入的协作能力。
 
-Near-term work prioritizes keeping the existing translation, refinement, and review features working reliably while gradually reducing coupling between this extension and the translation plugin. Clearer boundaries between collaboration handoffs and business logic should reduce the effect of business changes on the extension.
+近期以现有翻译、润色和审阅功能稳定可用为前提，逐步减少本扩展与翻译插件的耦合，明确协作交接与业务处理的边界，降低业务变化对扩展的影响。
 
-General-purpose collaboration is a future goal. The current interfaces are still built around translation, and a verified general-purpose integration for multiple plugins is not available yet.
+通用协作是未来目标。当前接口仍围绕翻译场景实现，尚未提供经过验证的多插件通用接入能力。
 
-## Requirements
+## 环境与依赖
 
-- DSH `>=0.2.0-rc.2` with the plugin and main-session interfaces required by this extension. Compatibility follows interface capabilities rather than an enumerated list of DSH versions.
-- The current translation workflow requires a companion build of `dsh-translation-plugin` providing the workspace and translation tasks. The companion builds use content protocol 3 and task-phase protocol 2.
-- Configured models in DSH.
-- Node.js 22 or later and pnpm to build from source.
+- DSH `>=0.2.0-rc.2 <0.2.3-0`，具备本扩展所需的插件与主会话接口；范围内按接口能力判断兼容性。
+- 当前翻译工作流需要与本扩展配套构建的 `dsh-translation-plugin`，提供翻译工作区和实际任务。当前配套使用内容协议 3 和任务阶段协议 2。
+- 在 DSH 中配置可用模型。
+- 从源码构建需要 Node.js 22 或更高版本及 pnpm。
 
-Linked submission requires submissions protocol 1. An available host interface skips Client-only replacements; Desktop startup fixes are checked separately. **Windows Desktop matches required bundled patches by target-module fingerprints, installs after a normal full exit, and uses them when DSH is reopened.** If an update leaves the relevant modules unchanged, the patch can be reused without updating the extension merely for a new version number. An identical installed patch is skipped. Users need no separate Node installation or installer script.
+支持 DSH `0.2.2-rc.1`，提供匹配的补丁产物；发送时保留宿主确认接收后才清空草稿的行为，失败保留草稿。构建该版 DSH 及其宿主补丁需要 Node.js 24.9 或更高版本。
 
-The current automatic patch artifacts are built from DSH `0.2.1-rc.3` and `0.2.1-rc.5`. These are build baselines, not an exhaustive plugin compatibility list. If target modules change and the host still lacks the submission interface, automatic replacement stops and requests new patch artifacts; other available capabilities remain usable. Future changes to required host interfaces may still need adaptation.
+联动发送需要 submissions protocol 1。宿主已有该接口时可跳过仅用于 Client 的替换，桌面启动修复单独检查。**Windows 桌面版会按目标模块指纹匹配所需的随包补丁，正常完全退出后自动安装，重新打开生效。** DSH 更新后相关模块内容不变，可继续复用补丁，不因版本号变化要求更新扩展。已安装相同补丁时跳过，用户无需另装 Node 或运行独立脚本。
 
-On supported Windows Desktop installations, the rc.5-based startup patch keeps only the current local Host authentication cookie and removes obsolete cookies of the same type. Other cookies are unchanged. This takes effect after the updated host patch is installed and DSH is reopened.
+当前自动补丁产物基于 DSH `0.2.1-rc.3`、`0.2.1-rc.5` 和 `0.2.2-rc.1` 构建；这是构建基线，不是插件兼容版本白名单。目标模块已改变且宿主仍缺少提交接口时，会提示需要新的补丁产物，停止自动替换；其他已有能力可继续使用。未来宿主若改变所需接口，仍需适配。
 
-Other environments and older versions can use the [0.2.0-rc.2 patch](patches/rc2-composer-submissions-v1.patch) and [manifest](patches/source-manifest.json), or the [0.2.1-rc.2 patch](patches/dsh-0.2.1-rc.2-composer-submissions-v1.patch) and [manifest](patches/source-manifest-0.2.1-rc.2.json). Also available are the rc.3 [source patch](patches/dsh-0.2.1-rc.3-composer-submissions-v1.patch) and [manifest](patches/source-manifest-0.2.1-rc.3.json), and the rc.5 [source patch](patches/dsh-0.2.1-rc.5-composer-submissions-v1.patch) and [manifest](patches/source-manifest-0.2.1-rc.5.json).
+在支持的 Windows 桌面环境中，`0.2.1-rc.5` 和 `0.2.2-rc.1` 的启动补丁仅保留当前本地 Host 的认证 Cookie，移除同类旧 Cookie，其他 Cookie 不受影响。安装新版宿主补丁并重新打开 DSH 后生效。
 
-## Installation and updates
+其他环境和旧版可使用 [0.2.0-rc.2 补丁](patches/rc2-composer-submissions-v1.patch)及其[源码清单](patches/source-manifest.json)，或 [0.2.1-rc.2 补丁](patches/dsh-0.2.1-rc.2-composer-submissions-v1.patch)及其[源码清单](patches/source-manifest-0.2.1-rc.2.json)。另提供 rc.3 的[源码补丁](patches/dsh-0.2.1-rc.3-composer-submissions-v1.patch)及[清单](patches/source-manifest-0.2.1-rc.3.json)、rc.5 的[源码补丁](patches/dsh-0.2.1-rc.5-composer-submissions-v1.patch)及[清单](patches/source-manifest-0.2.1-rc.5.json)、0.2.2-rc.1 的[源码补丁](patches/dsh-0.2.2-rc.1-composer-submissions-v1.patch)及[清单](patches/source-manifest-0.2.2-rc.1.json)。
 
-### Install
+## 安装与更新
 
-1. Download `dsh-composer-extension-<version>.tgz` from [Releases](https://github.com/Mulibaixi/dsh-composer-extension/releases/latest). Enter its full local path or the asset's download URL in DSH's plugin manager, then install and enable it. Choose the `.tgz` asset containing the build output and host patch artifacts; no local build is needed.
-2. Then install and enable the companion translation plugin from its [Releases](https://github.com/Mulibaixi/dsh-translation-plugin/releases/latest). Composer **0.4.6** provides the content protocol 3 and task-phase protocol 2 used by the current translation workflow. If the workspace and maintenance command are available, check them directly; fully restart if the plugin manager requests it. Open **Composer：联动组件维护**. If the component is prepared and awaiting installation, exit DSH completely and reopen it to apply the patch.
-3. Open the translation workspace and confirm that Normal mode does not report missing material-submission support.
+### 安装
 
-### Build from source
+1. 从 [Releases](https://github.com/Mulibaixi/dsh-composer-extension/releases/latest) 下载 `dsh-composer-extension-<版本>.tgz`，在 DSH 插件管理器的安装输入框中填写安装包的完整路径或附件下载链接，安装并启用。选择包含构建产物与宿主补丁的 `.tgz` 附件，使用者无需本地构建。
+2. 再从[翻译插件 Releases](https://github.com/Mulibaixi/dsh-translation-plugin/releases/latest) 安装并启用配套翻译插件。**Composer 0.4.7** 提供当前翻译工作流使用的内容协议 3 与任务阶段协议 2，并适配 DSH `0.2.2-rc.1`。工作区和维护命令已可用时可以直接检查；若插件管理器提示需要重启，再完整退出并重开。打开“Composer：联动组件维护”；若提示联动组件已准备、等待安装，正常完全退出 DSH 并重新打开以应用补丁。
+3. 打开翻译工作区，确认普通模式未提示材料提交能力缺失。
 
-Prepare the companion DSH environment and extension source. In this repository, run:
+### 从源码构建
+
+准备配套 DSH 环境及扩展源码，在本项目目录执行：
 
    ```powershell
    pnpm install --frozen-lockfile
    pnpm build
    ```
 
-After building, install this directory in DSH's plugin manager. The regular build does not generate host patch modules; automatic linked-component setup and complete distribution packaging also require [building patch artifacts](#building-patch-artifacts) below.
+构建完成后，可在 DSH 插件管理器中安装本目录。普通构建不生成宿主补丁模块；自动准备联动组件及生成完整分发包还需完成下文的[补丁产物构建](#构建补丁产物)。
 
-### Update
+### 更新
 
-1. Wait for current tasks to finish and confirm that material is saved. See the translation plugin's [backup and restoration guide (简体中文)](https://github.com/Mulibaixi/dsh-translation-plugin/blob/main/docs/user-guide.zh-CN.md#资料库备份与恢复) for a complete data snapshot.
-2. Enter the **new version's full `.tgz` path or versioned download URL** in the plugin manager, then install and enable it. No prior uninstall is required. Use a new versioned filename or URL; the same installed path may be reported as already installed. Update the translation plugin as well only when the release notes require a companion update.
-3. Follow the plugin manager's refresh, reload, or restart instructions, then open **Composer：联动组件维护**. If ready, keep using the existing patch. If a patch is prepared and awaiting installation, exit DSH normally and completely, then reopen it.
+1. 等待当前任务结束并确认资料已保存；完整数据快照与恢复步骤见翻译插件的[备份与恢复指南](https://github.com/Mulibaixi/dsh-translation-plugin/blob/main/docs/user-guide.zh-CN.md#资料库备份与恢复)。
+2. 在插件管理器的安装输入框填写**新版本 `.tgz` 的完整路径或版本下载链接**，安装并启用即可，无需预先卸载。使用带版本号的新文件名或链接；同一已安装路径可能被识别为“已安装”。仅在发行说明要求配套更新时，再更新翻译插件。
+3. 按插件管理器提示刷新、重载或重启，并打开 **Composer：联动组件维护**。若已就绪，继续使用现有补丁；若显示“已准备，等待退出安装”，正常完全退出并重开 DSH 后生效。
 
-**Updating the extension package and updating the host patch are separate operations.** An extension-code update does not reinstall a matching host patch. Whether the plugin can load immediately still depends on DSH's instructions. Replacing a host patch requires a normal full exit; refreshing the window does not apply it.
+**扩展包更新与宿主补丁更新是两件事。** 仅更新扩展代码且现有补丁匹配时，不会重复安装补丁；插件能否即时载入仍以 DSH 管理器提示为准。实际替换宿主补丁必须在 DSH 正常完全退出后进行，刷新窗口不能替代完整退出。
 
-For source installations, update the original source directory, reinstall dependencies, build, and refresh or reload the extension without uninstalling first. If the manager explicitly requires removal before installation, reinstall and enable it in the same DSH run. The uninstall test's exit-and-restore cycle is not the routine upgrade procedure.
+源码安装则更新原源码目录、重新安装依赖并构建，再刷新或重新加载扩展；无需先卸载。若管理器明确要求先卸载再安装，请在同一次 DSH 运行中完成重装并启用，避免把卸载验收中的“退出后恢复安装前状态”当作日常升级步骤。
 
-Check compatibility between the extension, translation plugin, and DSH build when updating. The extension does not persist recoverable tasks across restarts, and reloading does not automatically repeat model requests.
+更新时核对扩展、翻译插件与 DSH 构建是否匹配。扩展本身不保存可跨重启恢复的任务，重新加载也不会自动重发模型请求。
 
-See [CHANGELOG](CHANGELOG.md) for version changes.
+版本变化见 [CHANGELOG](CHANGELOG.md)。
 
-### Linked component maintenance
+### 联动组件维护
 
-Choose **Composer：联动组件维护** in the command list, or enter `/composer-maintenance`, to inspect status, check again, or arrange restoration of the previous host. A window closed to the tray keeps the helper waiting. Disabling, uninstalling, or reloading cancels a pending installation; a crash or forced exit does not authorize patch installation. An official update that changes the archive cancels the old task, and detection runs on the next load.
+从命令列表选择 **Composer：联动组件维护**，或输入 `/composer-maintenance`，查看状态、重新检测或安排恢复补丁前版本。关闭窗口但仍在托盘运行时，安装助手会继续等待。尚未安装的任务会在停用、卸载或重载时撤销；崩溃或强杀不会授予补丁安装许可。官方更新改变原包时取消旧任务，下次加载重新检测。
 
-**Disabling or uninstalling this extension through DSH's plugin manager automatically schedules restoration of a patch installed by this extension. Restoration completes after DSH exits completely.** The helper and recovery files stay outside the extension directory and remain usable after the package is removed. A normal reload retains the installed patch; enabling the extension again before exit cancels a detected pending automatic restoration. To resume Normal translation, install or enable the extension again and follow its linked-component maintenance status.
+**在 DSH 插件管理器中停用或卸载本扩展时，会自动安排恢复由本扩展安装的补丁，完全退出 DSH 后完成。** 助手与恢复材料保存在扩展目录之外，删除插件包后仍能执行。普通重载保留已安装补丁；退出前重新启用，会取消检测到的待执行自动恢复。需要继续使用普通翻译时，重新安装或启用扩展，再按维护状态完成联动组件准备。
 
-Automatic restoration requires a valid installation record and backup owned by the extension. It returns to the state before that installation. For a patch upgrade, the restored state can still contain the previous patch. Manual or early development patches need separate recovery. An upgraded host or invalid backup stops restoration rather than overwriting a later installation.
+自动恢复需要本扩展持有有效安装记录和备份，恢复到的是本次安装前状态。若本次安装是补丁升级，恢复后可能仍保留上一版补丁。手工或早期开发改包需另行恢复。宿主已升级或备份失效时会停止恢复，不覆盖后来安装的版本。
 
-Host-patch backups are under `dsh-composer-extension/host-patches/` in the current user's local application data directory, separate from translation-library backups. If DSH cannot open, exit it completely and run the corresponding task's `apply-host-patch.ps1 -JobPath <job.json> -Recover`. Recovery validates the version and hashes and refuses to replace a subsequently upgraded archive. A restored host is patched again only after **重新检测** is selected.
+补丁备份位于当前用户本地应用数据目录的 `dsh-composer-extension/host-patches/` 下，与翻译资料库备份分开。DSH 无法打开时，完全退出后可运行对应任务目录中的 `apply-host-patch.ps1 -JobPath <job.json> -Recover`。恢复会核验版本与哈希，拒绝覆盖后来升级的安装包。恢复后须主动“重新检测”才重新安排安装。
 
-### Building patch artifacts
+### 构建补丁产物
 
-The regular build generates Host, Client, and the exit helper. Maintainers generate the patch modules for distribution; users do not compile the host at runtime. Prepare the fixed DSH source with its build dependencies and the matching official `app.asar`, then run:
+一般构建生成 Host、Client 和退出安装助手。补丁模块由维护者生成后随扩展分发，用户机器不临时编译。准备固定 DSH 源码及其构建依赖、匹配的官方原版 `app.asar` 后执行：
 
 ```powershell
-node scripts/build-host-patches.mjs --source <DSH-source> --archive <official-app.asar>
+node scripts/build-host-patches.mjs --source <DSH源码目录> --archive <原版app.asar>
 pnpm build
 pnpm pack
 ```
 
-The tool validates and applies the fixed source patch in the provided source tree, then builds into `dist/host-patches/<build-version>/`. The rc.5 set contains three Client modules—two for linked submission and the plugin manager with corrected restart copy—plus the Desktop main entry for startup cookie maintenance. Earlier rc.2/rc.3 sets retain three Client modules. Run it for multiple baselines to bundle them together. Directory versions record build provenance; runtime checks compare actual target-module fingerprints. It needs Node.js 22.19 or later; `--from-build` reuses existing artifacts after source validation. Packaging checks each artifact set and helper integrity. Generated files do not enter the source repository.
+工具核验固定源码补丁，在提供的源码目录应用补丁并构建，输出到 `dist/host-patches/<构建版本>/`。rc.5 和 0.2.2-rc.1 产物各包含三个 Client 模块（两个联动模块及修正重启提示的插件管理模块），另包含负责启动 Cookie 维护的 Desktop 主进程入口；旧 rc.2／rc.3 产物仍为三个 Client 模块。可对多个基线分别运行并一起打包；目录版本只记录产物来源，运行时仍核对实际目标模块指纹。构建 0.2.2-rc.1 基线需要 Node.js 24.9 或更高版本，较早基线需要 22.19 或更高版本。`--from-build` 可复用已校验源码的现有产物。打包检查各组产物和助手完整性，生成文件不提交源码仓库。
 
-## User guide
+## 使用说明
 
-### 1. Send material and instructions together
+### 1. 将材料和要求一起发送
 
-Choose Normal mode in the translation plugin, enter source text or select a supported source file, then write the current requirements in the main chat input and send.
+在翻译插件中选择普通模式，填写待译文本或选择受支持的原稿文件，再在主聊天输入框写明本次要求并发送。
 
-Use the same translation session and saved material from different main chats. The model in the chat where you send the message handles the current submission.
+同一翻译会话和已保存资料可从不同主聊天继续使用；本次材料交给发送消息的主模型处理。
 
-The material accompanies that message, and the main model arranges processing according to your intent. Use the translation input for source material and the main chat for instructions, discussion, and revision requests. To send only a chat message this time, select **本次不附带 (Do not attach this time)** where offered by the translation plugin.
+材料与这次消息一起提交，主模型根据你的意图安排处理。翻译输入框用于原稿，主聊天用于要求、讨论和修改意见。若本次只想聊天，可在翻译插件提供的入口选择**本次不附带**。
 
-Submission retains the source as sent. Editing the next draft does not rewrite it. Use the translation plugin to inspect results, correct source material, or retranslate.
+材料提交后会保留当次原稿；之后修改草稿不会改写已发送内容。查看结果、纠错或重译，请使用翻译插件的对应操作。
 
-### 2. Supplementary information
+### 2. 补充信息
 
-Describe the current goal or specify information in the main chat. The main model consolidates the relevant background and translation requirements, then delivers them to the translation model for the current translation or refinement.
+在主聊天中说明本次目标或指定信息，主模型整合相关背景和翻译要求后递交给翻译模型，用于本次翻译或润色。
 
-Interactions start from specific user tasks. During translation, a supported companion plugin can return the translation model's focused questions to the main model for clarification and a supplemented call.
+交互以具体用户任务为起点。翻译过程中，配套插件可将翻译模型的关键问题返回主模型，澄清后再发起补充调用。
 
-### 3. When background work needs attention
+### 3. 后台任务完成或需要处理时
 
-Integrated tasks notify the owning main model about critical questions, changed material, or results needing review. They do not send a notice for every completed chunk. The main model continues from the actual task without requiring a repeated user instruction at each step.
+已接入的任务会在关键问题、资料变化或结果需要审阅时通知所属主模型；不是每个分块完成都发送提醒。主模型根据实际任务继续处理，你不必为每一步重复发送指令。
 
-After switching main chats, notices for existing tasks still go to the chat that started the task.
+切换主聊天后，已有任务的通知仍发送到发起任务的主聊天。
 
-After you stop the main model, late notices do not substitute for a new user instruction. Check the original task before retrying an unknown outcome. Background results and history remain available in the translation plugin.
+用户停止主模型后，迟到的通知不会代替新的用户指令。如果结果未知，应先查询原任务，避免重复启动。后台结果及历史仍在翻译插件中查看。
 
-### 4. When a feature is unavailable
+### 4. 不可用时如何判断
 
-- **Linked submission is unavailable**: check the companion DSH build, confirm both plugins are enabled, and restart DSH.
-- **Context questions**: Requires a companion translation plugin that supports this flow and a translation model with tool support. Question references last only for the current host run; each supplemented call has its own usage.
-- **No stage notice appears**: not all background workflows use this extension. Inspect progress and errors in the translation plugin instead of resubmitting solely because the main chat is quiet.
-- **Work does not continue after restart**: the extension does not automatically restore temporary exchanges. Check the original task in the translation plugin before explicitly choosing the next action.
+- **联动发送不可用**：先检查是否使用配套 DSH 构建，并确认本扩展与翻译插件均已启用且已重启。
+- **翻译模型要求补充信息**：需要支持此流程的配套翻译插件和支持工具调用的翻译模型。问题引用只在当前宿主运行期有效，每次补充调用独立计量。
+- **没有阶段通知**：并非所有后台流程都使用本扩展；检查翻译插件中的实际进度与错误，不要仅凭主聊天静默重复提交。
+- **重启后任务没有继续**：扩展不自动恢复临时交互；回到翻译插件核对原任务，再明确选择下一步。
 
-## Projects and documentation
+## 项目与文档
 
-| Entry | Link |
+| 入口 | 链接 |
 | --- | --- |
-| Composer extension | [Mulibaixi/dsh-composer-extension](https://github.com/Mulibaixi/dsh-composer-extension) |
-| Translation plugin | [Mulibaixi/dsh-translation-plugin](https://github.com/Mulibaixi/dsh-translation-plugin) |
-| Distribution packages | [Composer releases](https://github.com/Mulibaixi/dsh-composer-extension/releases) · [Translation releases](https://github.com/Mulibaixi/dsh-translation-plugin/releases) |
-| Bug reports | [Composer issues](https://github.com/Mulibaixi/dsh-composer-extension/issues) |
-| Installation and component maintenance | [Installation and updates](#installation-and-updates) |
-| Operations | [User guide](#user-guide) |
-| Changes | [CHANGELOG](CHANGELOG.md) |
-| Contributions | [CONTRIBUTING](CONTRIBUTING.md) |
+| Composer 扩展 | [Mulibaixi/dsh-composer-extension](https://github.com/Mulibaixi/dsh-composer-extension) |
+| 翻译插件 | [Mulibaixi/dsh-translation-plugin](https://github.com/Mulibaixi/dsh-translation-plugin) |
+| 分发包 | [Composer 发行页](https://github.com/Mulibaixi/dsh-composer-extension/releases) · [翻译插件发行页](https://github.com/Mulibaixi/dsh-translation-plugin/releases) |
+| 问题反馈 | [Composer Issues](https://github.com/Mulibaixi/dsh-composer-extension/issues) |
+| 安装与组件维护 | [安装与更新](#安装与更新) |
+| 操作说明 | [使用说明](#使用说明) |
+| 更新记录 | [CHANGELOG](CHANGELOG.md) |
+| 贡献指南 | [CONTRIBUTING](CONTRIBUTING.md) |
 
-## Contributing and license
+## 贡献与许可证
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution instructions and [AGENTS.md](AGENTS.md) for project rules.
+贡献方式见 [CONTRIBUTING.md](CONTRIBUTING.md)，项目规范见 [AGENTS.md](AGENTS.md)。
 
-Licensed under [MIT](LICENSE).
+本项目采用 [MIT 许可证](LICENSE)。

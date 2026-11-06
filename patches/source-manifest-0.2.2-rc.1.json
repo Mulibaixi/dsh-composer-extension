@@ -1,0 +1,61 @@
+{
+  "upstreamTag": "dsh-v0.2.2-rc.1",
+  "upstreamCommit": "66491b05e3f05ad35bcdd4f6cd7ed26041d9e3db",
+  "composerProtocol": 1,
+  "patch": {
+    "file": "dsh-0.2.2-rc.1-composer-submissions-v1.patch",
+    "sha256": "690a7374949be7fa9215445d763978dcc8889826599912abbe8cf7c3215b2d9f"
+  },
+  "files": [
+    {
+      "path": "apps/desktop/src/main.ts",
+      "upstreamSha256": "51f22c1596d03af995962de58ee3d134799cc2f48aa90904e3d618785a78e893",
+      "patchedSha256": "1677420f71084304b0f4f8e8680fdbbd75650fb0a90e912f4450509f16dc109f"
+    },
+    {
+      "path": "packages/api/session-controller/src/client/contract/session.ts",
+      "upstreamSha256": "299122c2bf5124922717b79997c6eadc13cc7b129548102e1dfdd842121dcbb8",
+      "patchedSha256": "7d5ead2083cfc04d6c739bfe4410d5e3a99c68b3f0d5ec1d633b0625108c840d"
+    },
+    {
+      "path": "packages/api/session-controller/src/client/sessions/session.ts",
+      "upstreamSha256": "4c898a51e46429c313ec8f22f6902c5f29b868075b282e6de0533a34de174a04",
+      "patchedSha256": "808ac572ebe8c3c3f9e0e2beb5d5e25afa78bc1939f72f8c3c6ef1dd06e25708"
+    },
+    {
+      "path": "packages/client/ui-conversation/src/client/contract/submissions.ts",
+      "upstreamSha256": null,
+      "patchedSha256": "856be9726545ced0906e77e972d5773749751df41cc6bb173073542874dd3ef2"
+    },
+    {
+      "path": "packages/client/ui-conversation/src/client/index.ts",
+      "upstreamSha256": "2b296ac7526aa3594ed1319959a527e420eee3508d71e5b512590e7456fa1378",
+      "patchedSha256": "ede79e7f939c1d451bab02dd1a062c12dec10f35d6be2301bf0233316210f032"
+    },
+    {
+      "path": "packages/client/ui-conversation/src/client/input/facade.ts",
+      "upstreamSha256": "fedc7c707ab6fdbe4899030c17c29ae010e1893badea97fcd964da2b2417925e",
+      "patchedSha256": "8c2a031be3e01d75b29a091925434d564099f7cf7d89bcc8189dfe6301d4bf6f"
+    },
+    {
+      "path": "packages/client/ui-conversation/src/client/input/hub.ts",
+      "upstreamSha256": "ff8f1a8a5653b1c3c42d99fee1d72ab1ee687ba7d33e98ceb7b3ef81246eb47d",
+      "patchedSha256": "97defc6746574094840cbe43f10808afe2149a1cd7aaa4c03090c08a2ea8f5dd"
+    },
+    {
+      "path": "packages/client/ui-conversation/src/client/input/submissions.ts",
+      "upstreamSha256": null,
+      "patchedSha256": "9a5b8fe0a1ad676c736bca10c3117769426e43f0b50716be739660ffd2e58597"
+    },
+    {
+      "path": "packages/client/ui-conversation/src/client/service.ts",
+      "upstreamSha256": "e11135745dff9c76935acf2736307d9c7272eb8592db01819720ced69705f371",
+      "patchedSha256": "fa71a95ed27c527c13a26b04c2464af60f5397c2ea146f138fb6aa0e90e936f7"
+    },
+    {
+      "path": "packages/client/ui-plugin-manager/src/client/locales.ts",
+      "upstreamSha256": "dc2b570fc321e7ddc83a4dbe1e3f579cffc780472250d512d190209c0a0c78e3",
+      "patchedSha256": "ef2a753b3fbe403c2aad8df7cb64e96f8c41a17c44a3092fe45abd7b1e1b4eb7"
+    }
+  ]
+}

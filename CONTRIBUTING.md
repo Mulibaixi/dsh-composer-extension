@@ -12,4 +12,4 @@ Host 负责交换协调，翻译插件持有材料、模型调用及历史；Cli
 
 不得提交密钥、用户翻译正文、本机路径、profile、内部设计与验收资料、依赖目录或构建产物。内部资料保存在工作区的 `docs/plugin-development/dsh-translation-plugin/`。
 
-`README.md` 使用英文，`README.zh-CN.md` 使用中文并保持同步；CHANGELOG 和提交说明使用中文。提交采用 Conventional Commits，不绕过 Git hooks，不重写历史。本地提交不代表远程发布，远程发布需用户明确授权。
+`README.md` 使用中文，`README.en.md` 使用英文，两者保持同步并互相链接；CHANGELOG 和提交说明使用中文。提交采用 Conventional Commits，不绕过 Git hooks，不重写历史。本地提交不代表远程发布，远程发布需用户明确授权。
