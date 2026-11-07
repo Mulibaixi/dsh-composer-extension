@@ -4,6 +4,8 @@
 
 [![许可证：MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![GitHub Release](https://img.shields.io/github/v/release/Mulibaixi/dsh-composer-extension?label=release)](https://github.com/Mulibaixi/dsh-composer-extension/releases/latest)
+[![Awesome DSH Plugin：已收录](https://img.shields.io/badge/awesome--dsh--plugin-listed-2ea44f)](https://awesome-dsh-plugin.com/?q=Mulibaixi%2Fdsh-composer-extension)
+[![dsh-plugin.org：已收录](https://dsh-plugin.org/badges/listed.svg)](https://dsh-plugin.org/plugins/mulibaixi/dsh-composer-extension)
 
 为 DeepSeek Harness（DSH）的主聊天输入框提供材料联动与任务协调能力，目标是逐步支持主会话与不同插件之间的协作交互。
 
@@ -150,6 +152,7 @@ pnpm pack
 | Composer 扩展 | [Mulibaixi/dsh-composer-extension](https://github.com/Mulibaixi/dsh-composer-extension) |
 | 翻译插件 | [Mulibaixi/dsh-translation-plugin](https://github.com/Mulibaixi/dsh-translation-plugin) |
 | 分发包 | [Composer 发行页](https://github.com/Mulibaixi/dsh-composer-extension/releases) · [翻译插件发行页](https://github.com/Mulibaixi/dsh-translation-plugin/releases) |
+| 插件市场 | [Awesome DSH Plugin](https://awesome-dsh-plugin.com/?q=Mulibaixi%2Fdsh-composer-extension) · [dsh-plugin.org](https://dsh-plugin.org/plugins/mulibaixi/dsh-composer-extension) |
 | 问题反馈 | [Composer Issues](https://github.com/Mulibaixi/dsh-composer-extension/issues) |
 | 安装与组件维护 | [安装与更新](#安装与更新) |
 | 操作说明 | [使用说明](#使用说明) |

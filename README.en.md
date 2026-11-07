@@ -4,6 +4,8 @@
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![GitHub Release](https://img.shields.io/github/v/release/Mulibaixi/dsh-composer-extension?label=release)](https://github.com/Mulibaixi/dsh-composer-extension/releases/latest)
+[![Listed on Awesome DSH Plugin](https://img.shields.io/badge/awesome--dsh--plugin-listed-2ea44f)](https://awesome-dsh-plugin.com/?q=Mulibaixi%2Fdsh-composer-extension)
+[![Listed on dsh-plugin.org](https://dsh-plugin.org/badges/listed.svg)](https://dsh-plugin.org/plugins/mulibaixi/dsh-composer-extension)
 
 Provides linked material submission and task coordination for the main chat input in DeepSeek Harness (DSH), with the goal of gradually supporting collaboration between the main conversation and different plugins.
 
@@ -150,6 +152,7 @@ After you stop the main model, late notices do not substitute for a new user ins
 | Composer extension | [Mulibaixi/dsh-composer-extension](https://github.com/Mulibaixi/dsh-composer-extension) |
 | Translation plugin | [Mulibaixi/dsh-translation-plugin](https://github.com/Mulibaixi/dsh-translation-plugin) |
 | Distribution packages | [Composer releases](https://github.com/Mulibaixi/dsh-composer-extension/releases) · [Translation releases](https://github.com/Mulibaixi/dsh-translation-plugin/releases) |
+| Plugin directories | [Awesome DSH Plugin](https://awesome-dsh-plugin.com/?q=Mulibaixi%2Fdsh-composer-extension) · [dsh-plugin.org](https://dsh-plugin.org/plugins/mulibaixi/dsh-composer-extension) |
 | Bug reports | [Composer issues](https://github.com/Mulibaixi/dsh-composer-extension/issues) |
 | Installation and component maintenance | [Installation and updates](#installation-and-updates) |
 | Operations | [User guide](#user-guide) |
