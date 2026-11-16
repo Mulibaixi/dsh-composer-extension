@@ -1,0 +1,56 @@
+{
+  "upstreamTag": "dsh-v0.2.2-rc.3",
+  "upstreamCommit": "38a6a5c965aa99ab525161efb7cc5cf1fe62fced",
+  "composerProtocol": 1,
+  "patch": {
+    "file": "dsh-0.2.2-rc.3-composer-submissions-v1.patch",
+    "sha256": "f3981b49866b3324924a4765bd5f6dd06841057be183de68bfb67df932c5c45c"
+  },
+  "files": [
+    {
+      "path": "packages/api/session-controller/src/client/contract/session.ts",
+      "upstreamSha256": "e9f9c728e3428acdc5747ba4e753bac77be2830a9e954ed13c2b2e8465e549a0",
+      "patchedSha256": "f61007c7b6264fe1f999d0e62ee51612800078f75092accee964086c06d5058a"
+    },
+    {
+      "path": "packages/api/session-controller/src/client/sessions/session.ts",
+      "upstreamSha256": "a8dd4b3ab8a1c11e4cc14edbc47612899e4c7044478117bd4b97cc2e31d4ce10",
+      "patchedSha256": "54fa8b4c9e25f23d860cd80db9d4b6db73023627f34649721f0925b468cc9875"
+    },
+    {
+      "path": "packages/client/ui-conversation/src/client/contract/submissions.ts",
+      "upstreamSha256": null,
+      "patchedSha256": "856be9726545ced0906e77e972d5773749751df41cc6bb173073542874dd3ef2"
+    },
+    {
+      "path": "packages/client/ui-conversation/src/client/index.ts",
+      "upstreamSha256": "766644325efa1300dd5f391430f5b0651366c72f8b71db31f3419c28ac1fdaf4",
+      "patchedSha256": "c0303c907324b88d6507a747629db8bc6d3fa0904c2db3750da70848142c8b0d"
+    },
+    {
+      "path": "packages/client/ui-conversation/src/client/input/facade.ts",
+      "upstreamSha256": "35d04426a4ac222b890ff0926acd3742df88e7862e90ba3a7ebb55c4a4791266",
+      "patchedSha256": "f5e67802a9d6f6e04be7641f4d87e079e1b00b4eaead50364a880be675b6141a"
+    },
+    {
+      "path": "packages/client/ui-conversation/src/client/input/hub.ts",
+      "upstreamSha256": "126547511612b45d796bd72f84d3ad923612f9dd6e24738d337a31fd49c16417",
+      "patchedSha256": "ebb64f6c2b1c7c4e6f99ee7940e0055113f6af118b813948c51f0aa4f6a651e8"
+    },
+    {
+      "path": "packages/client/ui-conversation/src/client/input/submissions.ts",
+      "upstreamSha256": null,
+      "patchedSha256": "9a5b8fe0a1ad676c736bca10c3117769426e43f0b50716be739660ffd2e58597"
+    },
+    {
+      "path": "packages/client/ui-conversation/src/client/service.ts",
+      "upstreamSha256": "e11135745dff9c76935acf2736307d9c7272eb8592db01819720ced69705f371",
+      "patchedSha256": "fa71a95ed27c527c13a26b04c2464af60f5397c2ea146f138fb6aa0e90e936f7"
+    },
+    {
+      "path": "packages/client/ui-plugin-manager/src/client/locales.ts",
+      "upstreamSha256": "92fb58326cc32e249e7925352d45008fd7d9e3536ed1a03fdabf6152cc8f2c63",
+      "patchedSha256": "709e1e6b58d8f5bbf59453738cf3fd86ec0cb3255d369d63155a70f445e8fa11"
+    }
+  ]
+}

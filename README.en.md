@@ -47,22 +47,22 @@ General-purpose collaboration is a future goal. The current interfaces are still
 - Configured models in DSH.
 - Node.js 22 or later and pnpm to build from source.
 
-DSH `0.2.2-rc.1` is supported with a matching patch set. Submission keeps the native behavior of clearing the draft only after host acceptance; failures retain the draft. Building this DSH version and its host patches requires Node.js 24.9 or later.
+Matching patch sets are available for DSH `0.2.2-rc.1` and `0.2.2-rc.3`. The composer clears the draft after host acceptance and retains it on failure. Building these DSH versions and their host patches requires Node.js 24.9 or later.
 
 Linked submission requires submissions protocol 1. An available host interface skips Client-only replacements; Desktop startup fixes are checked separately. **Windows Desktop matches required bundled patches by target-module fingerprints, installs after a normal full exit, and uses them when DSH is reopened.** If an update leaves the relevant modules unchanged, the patch can be reused without updating the extension merely for a new version number. An identical installed patch is skipped. Users need no separate Node installation or installer script.
 
-The current automatic patch artifacts are built from DSH `0.2.1-rc.3`, `0.2.1-rc.5`, and `0.2.2-rc.1`. These are build baselines, not an exhaustive plugin compatibility list. If target modules change and the host still lacks the submission interface, automatic replacement stops and requests new patch artifacts; other available capabilities remain usable. Future changes to required host interfaces may still need adaptation.
+The current automatic patch artifacts are built from DSH `0.2.1-rc.3`, `0.2.1-rc.5`, `0.2.2-rc.1`, and `0.2.2-rc.3`. These are build baselines, not an exhaustive plugin compatibility list. If target modules change and the host still lacks the submission interface, automatic replacement stops and requests new patch artifacts; other available capabilities remain usable. Future changes to required host interfaces may still need adaptation.
 
 On supported Windows Desktop installations, the startup patches for `0.2.1-rc.5` and `0.2.2-rc.1` keep only the current local Host authentication cookie and remove obsolete cookies of the same type. Other cookies are unchanged. This takes effect after the updated host patch is installed and DSH is reopened.
 
-Other environments and older versions can use the [0.2.0-rc.2 patch](patches/rc2-composer-submissions-v1.patch) and [manifest](patches/source-manifest.json), or the [0.2.1-rc.2 patch](patches/dsh-0.2.1-rc.2-composer-submissions-v1.patch) and [manifest](patches/source-manifest-0.2.1-rc.2.json). Also available are the rc.3 [source patch](patches/dsh-0.2.1-rc.3-composer-submissions-v1.patch) and [manifest](patches/source-manifest-0.2.1-rc.3.json), the rc.5 [source patch](patches/dsh-0.2.1-rc.5-composer-submissions-v1.patch) and [manifest](patches/source-manifest-0.2.1-rc.5.json), and the 0.2.2-rc.1 [source patch](patches/dsh-0.2.2-rc.1-composer-submissions-v1.patch) and [manifest](patches/source-manifest-0.2.2-rc.1.json).
+Other environments and older versions can use the [0.2.0-rc.2 patch](patches/rc2-composer-submissions-v1.patch) and [manifest](patches/source-manifest.json), or the [0.2.1-rc.2 patch](patches/dsh-0.2.1-rc.2-composer-submissions-v1.patch) and [manifest](patches/source-manifest-0.2.1-rc.2.json). Also available are the rc.3 [source patch](patches/dsh-0.2.1-rc.3-composer-submissions-v1.patch) and [manifest](patches/source-manifest-0.2.1-rc.3.json), the rc.5 [source patch](patches/dsh-0.2.1-rc.5-composer-submissions-v1.patch) and [manifest](patches/source-manifest-0.2.1-rc.5.json), and the 0.2.2-rc.1 [source patch](patches/dsh-0.2.2-rc.1-composer-submissions-v1.patch) and [manifest](patches/source-manifest-0.2.2-rc.1.json), and the 0.2.2-rc.3 [source patch](patches/dsh-0.2.2-rc.3-composer-submissions-v1.patch) and [manifest](patches/source-manifest-0.2.2-rc.3.json).
 
 ## Installation and updates
 
 ### Install
 
 1. Download `dsh-composer-extension-<version>.tgz` from [Releases](https://github.com/Mulibaixi/dsh-composer-extension/releases/latest). Enter its full local path or the asset's download URL in DSH's plugin manager, then install and enable it. Choose the `.tgz` asset containing the build output and host patch artifacts; no local build is needed.
-2. Then install and enable the companion translation plugin from its [Releases](https://github.com/Mulibaixi/dsh-translation-plugin/releases/latest). Composer **0.4.7** provides the content protocol 3 and task-phase protocol 2 used by the current translation workflow, including support for DSH `0.2.2-rc.1`. If the workspace and maintenance command are available, check them directly; fully restart if the plugin manager requests it. Open **Composer：联动组件维护**. If the component is prepared and awaiting installation, exit DSH completely and reopen it to apply the patch.
+2. Then install and enable the companion translation plugin from its [Releases](https://github.com/Mulibaixi/dsh-translation-plugin/releases/latest). Composer **0.4.8** provides the content protocol 3 and task-phase protocol 2 used by the current translation workflow and bundles a matching patch for DSH `0.2.2-rc.3`. If the workspace and maintenance command are available, check them directly; fully restart if the plugin manager requests it. Open **Composer：联动组件维护**. If the component is prepared and awaiting installation, exit DSH completely and reopen it to apply the patch.
 3. Open the translation workspace and confirm that Normal mode does not report missing material-submission support.
 
 ### Build from source
@@ -102,7 +102,7 @@ Host-patch backups are under `dsh-composer-extension/host-patches/` in the curre
 
 ### Building patch artifacts
 
-The regular build generates Host, Client, and the exit helper. Maintainers generate the patch modules for distribution; users do not compile the host at runtime. Prepare the fixed DSH source with its build dependencies and the matching official `app.asar`, then run:
+The regular build generates Host, Client, and the exit helper. Maintainers generate the patch modules for distribution; users do not compile the host at runtime. Prepare the fixed DSH source, its built workspace dependencies, and the matching official `app.asar`, then run:
 
 ```powershell
 node scripts/build-host-patches.mjs --source <DSH-source> --archive <official-app.asar>
@@ -110,7 +110,7 @@ pnpm build
 pnpm pack
 ```
 
-The tool validates and applies the fixed source patch in the provided source tree, then builds into `dist/host-patches/<build-version>/`. The rc.5 and 0.2.2-rc.1 sets each contain three Client modules—two for linked submission and the plugin manager with corrected restart copy—plus the Desktop main entry for startup cookie maintenance. Earlier rc.2/rc.3 sets retain three Client modules. Run it for multiple baselines to bundle them together. Directory versions record build provenance; runtime checks compare actual target-module fingerprints. Building the 0.2.2-rc.1 baseline needs Node.js 24.9 or later; earlier baselines need 22.19 or later. `--from-build` reuses existing artifacts after source validation. Packaging checks each artifact set and helper integrity. Generated files do not enter the source repository.
+The tool validates and applies the fixed source patch in the provided source tree, then builds into `dist/host-patches/<build-version>/`. The rc.5 and 0.2.2-rc.1 sets each contain three Client modules—two for linked submission and the plugin manager with corrected restart copy—plus the Desktop main entry for startup cookie maintenance. The `0.2.2-rc.3` and earlier `0.2.1-rc.3` sets contain three Client modules. Run it for multiple baselines to bundle them together. Directory versions record build provenance; runtime checks compare actual target-module fingerprints. Building the 0.2.2 baselines needs Node.js 24.9 or later; earlier baselines need 22.19 or later. `--from-build` reuses existing artifacts after source validation. Packaging checks each artifact set and helper integrity. Generated files do not enter the source repository.
 
 ## User guide
 

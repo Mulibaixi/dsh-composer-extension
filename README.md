@@ -47,22 +47,22 @@
 - 在 DSH 中配置可用模型。
 - 从源码构建需要 Node.js 22 或更高版本及 pnpm。
 
-支持 DSH `0.2.2-rc.1`，提供匹配的补丁产物；发送时保留宿主确认接收后才清空草稿的行为，失败保留草稿。构建该版 DSH 及其宿主补丁需要 Node.js 24.9 或更高版本。
+支持 DSH `0.2.2-rc.1` 和 `0.2.2-rc.3`，提供匹配的补丁产物。发送时保留宿主确认接收后才清空草稿的行为，失败保留草稿。构建这两个版本及其宿主补丁需要 Node.js 24.9 或更高版本。
 
 联动发送需要 submissions protocol 1。宿主已有该接口时可跳过仅用于 Client 的替换，桌面启动修复单独检查。**Windows 桌面版会按目标模块指纹匹配所需的随包补丁，正常完全退出后自动安装，重新打开生效。** DSH 更新后相关模块内容不变，可继续复用补丁，不因版本号变化要求更新扩展。已安装相同补丁时跳过，用户无需另装 Node 或运行独立脚本。
 
-当前自动补丁产物基于 DSH `0.2.1-rc.3`、`0.2.1-rc.5` 和 `0.2.2-rc.1` 构建；这是构建基线，不是插件兼容版本白名单。目标模块已改变且宿主仍缺少提交接口时，会提示需要新的补丁产物，停止自动替换；其他已有能力可继续使用。未来宿主若改变所需接口，仍需适配。
+当前自动补丁产物基于 DSH `0.2.1-rc.3`、`0.2.1-rc.5`、`0.2.2-rc.1` 和 `0.2.2-rc.3` 构建；这是构建基线，不是插件兼容版本白名单。目标模块已改变且宿主仍缺少提交接口时，会提示需要新的补丁产物，停止自动替换；其他已有能力可继续使用。未来宿主若改变所需接口，仍需适配。
 
 在支持的 Windows 桌面环境中，`0.2.1-rc.5` 和 `0.2.2-rc.1` 的启动补丁仅保留当前本地 Host 的认证 Cookie，移除同类旧 Cookie，其他 Cookie 不受影响。安装新版宿主补丁并重新打开 DSH 后生效。
 
-其他环境和旧版可使用 [0.2.0-rc.2 补丁](patches/rc2-composer-submissions-v1.patch)及其[源码清单](patches/source-manifest.json)，或 [0.2.1-rc.2 补丁](patches/dsh-0.2.1-rc.2-composer-submissions-v1.patch)及其[源码清单](patches/source-manifest-0.2.1-rc.2.json)。另提供 rc.3 的[源码补丁](patches/dsh-0.2.1-rc.3-composer-submissions-v1.patch)及[清单](patches/source-manifest-0.2.1-rc.3.json)、rc.5 的[源码补丁](patches/dsh-0.2.1-rc.5-composer-submissions-v1.patch)及[清单](patches/source-manifest-0.2.1-rc.5.json)、0.2.2-rc.1 的[源码补丁](patches/dsh-0.2.2-rc.1-composer-submissions-v1.patch)及[清单](patches/source-manifest-0.2.2-rc.1.json)。
+其他环境和旧版可使用 [0.2.0-rc.2 补丁](patches/rc2-composer-submissions-v1.patch)及其[源码清单](patches/source-manifest.json)，或 [0.2.1-rc.2 补丁](patches/dsh-0.2.1-rc.2-composer-submissions-v1.patch)及其[源码清单](patches/source-manifest-0.2.1-rc.2.json)。另提供 rc.3 的[源码补丁](patches/dsh-0.2.1-rc.3-composer-submissions-v1.patch)及[清单](patches/source-manifest-0.2.1-rc.3.json)、rc.5 的[源码补丁](patches/dsh-0.2.1-rc.5-composer-submissions-v1.patch)及[清单](patches/source-manifest-0.2.1-rc.5.json)、0.2.2-rc.1 的[源码补丁](patches/dsh-0.2.2-rc.1-composer-submissions-v1.patch)及[清单](patches/source-manifest-0.2.2-rc.1.json)，以及 0.2.2-rc.3 的[源码补丁](patches/dsh-0.2.2-rc.3-composer-submissions-v1.patch)及[清单](patches/source-manifest-0.2.2-rc.3.json)。
 
 ## 安装与更新
 
 ### 安装
 
 1. 从 [Releases](https://github.com/Mulibaixi/dsh-composer-extension/releases/latest) 下载 `dsh-composer-extension-<版本>.tgz`，在 DSH 插件管理器的安装输入框中填写安装包的完整路径或附件下载链接，安装并启用。选择包含构建产物与宿主补丁的 `.tgz` 附件，使用者无需本地构建。
-2. 再从[翻译插件 Releases](https://github.com/Mulibaixi/dsh-translation-plugin/releases/latest) 安装并启用配套翻译插件。**Composer 0.4.7** 提供当前翻译工作流使用的内容协议 3 与任务阶段协议 2，并适配 DSH `0.2.2-rc.1`。工作区和维护命令已可用时可以直接检查；若插件管理器提示需要重启，再完整退出并重开。打开“Composer：联动组件维护”；若提示联动组件已准备、等待安装，正常完全退出 DSH 并重新打开以应用补丁。
+2. 再从[翻译插件 Releases](https://github.com/Mulibaixi/dsh-translation-plugin/releases/latest) 安装并启用配套翻译插件。**Composer 0.4.8** 提供当前翻译工作流使用的内容协议 3 与任务阶段协议 2，随包提供 DSH `0.2.2-rc.3` 的匹配补丁。工作区和维护命令已可用时可以直接检查；若插件管理器提示需要重启，再完整退出并重开。打开“Composer：联动组件维护”；若提示联动组件已准备、等待安装，正常完全退出 DSH 并重新打开以应用补丁。
 3. 打开翻译工作区，确认普通模式未提示材料提交能力缺失。
 
 ### 从源码构建
@@ -102,7 +102,7 @@
 
 ### 构建补丁产物
 
-一般构建生成 Host、Client 和退出安装助手。补丁模块由维护者生成后随扩展分发，用户机器不临时编译。准备固定 DSH 源码及其构建依赖、匹配的官方原版 `app.asar` 后执行：
+一般构建生成 Host、Client 和退出安装助手。补丁模块由维护者生成后随扩展分发，用户机器不临时编译。准备固定 DSH 源码、已构建的 DSH 工作区依赖和匹配的官方原版 `app.asar` 后执行：
 
 ```powershell
 node scripts/build-host-patches.mjs --source <DSH源码目录> --archive <原版app.asar>
@@ -110,7 +110,7 @@ pnpm build
 pnpm pack
 ```
 
-工具核验固定源码补丁，在提供的源码目录应用补丁并构建，输出到 `dist/host-patches/<构建版本>/`。rc.5 和 0.2.2-rc.1 产物各包含三个 Client 模块（两个联动模块及修正重启提示的插件管理模块），另包含负责启动 Cookie 维护的 Desktop 主进程入口；旧 rc.2／rc.3 产物仍为三个 Client 模块。可对多个基线分别运行并一起打包；目录版本只记录产物来源，运行时仍核对实际目标模块指纹。构建 0.2.2-rc.1 基线需要 Node.js 24.9 或更高版本，较早基线需要 22.19 或更高版本。`--from-build` 可复用已校验源码的现有产物。打包检查各组产物和助手完整性，生成文件不提交源码仓库。
+工具核验固定源码补丁，在提供的源码目录应用补丁并构建，输出到 `dist/host-patches/<构建版本>/`。rc.5 和 0.2.2-rc.1 产物各包含三个 Client 模块（两个联动模块及修正重启提示的插件管理模块），另包含负责启动 Cookie 维护的 Desktop 主进程入口；`0.2.2-rc.3` 和较早的 `0.2.1-rc.3` 产物包含三个 Client 模块。可对多个基线分别运行并一起打包；目录版本只记录产物来源，运行时仍核对实际目标模块指纹。构建 0.2.2 系列基线需要 Node.js 24.9 或更高版本，较早基线需要 22.19 或更高版本。`--from-build` 可复用已校验源码的现有产物。打包检查各组产物和助手完整性，生成文件不提交源码仓库。
 
 ## 使用说明
 
